@@ -1,0 +1,17 @@
+.git
+.gitignore
+bin/
+build/
+dist/
+*.log
+*.tmp
+*.swp
+*.swo
+*.DS_Store
+node_modules/
+vendor/
+coverage/
+*.test
+*.out
+docker-compose.override.yml
+.env
