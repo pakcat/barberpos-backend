@@ -3,7 +3,7 @@ info:
   title: BarberPOS Backend API
   version: 0.1.0
 servers:
-  - url: http://localhost:8080
+  - url: https://api.barberpos.cloud
 paths:
   /health:
     get:
