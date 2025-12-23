@@ -1,4 +1,8 @@
 -- +goose Up
+-- Ensure unique constraints for seeds
+CREATE UNIQUE INDEX IF NOT EXISTS idx_regions_name ON regions (name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name ON categories (name);
+
 -- Seed regions (38 provinces)
 INSERT INTO regions (name) VALUES
 ('Aceh'), ('Sumatera Utara'), ('Sumatera Barat'), ('Riau'), ('Kepulauan Riau'),
