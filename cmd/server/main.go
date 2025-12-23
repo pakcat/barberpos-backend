@@ -63,6 +63,8 @@ func main() {
 	settingsRepo := repository.SettingsRepository{DB: pg}
 	financeRepo := repository.FinanceRepository{DB: pg}
 	membershipRepo := repository.MembershipRepository{DB: pg}
+	stockRepo := repository.StockRepository{DB: pg}
+	employeeRepo := repository.EmployeeRepository{DB: pg}
 	fcmRepo := repository.FCMRepository{DB: pg}
 	txRepo := repository.TransactionRepository{DB: pg}
 	attendanceRepo := repository.AttendanceRepository{DB: pg}
@@ -82,6 +84,8 @@ func main() {
 	settingsHandler := handler.SettingsHandler{Repo: settingsRepo}
 	financeHandler := handler.FinanceHandler{Repo: financeRepo}
 	membershipHandler := handler.MembershipHandler{Repo: membershipRepo}
+	stockHandler := handler.StockHandler{Repo: stockRepo}
+	employeeHandler := handler.EmployeeHandler{Repo: employeeRepo}
 	fcmHandler := handler.FCMHandler{Repo: fcmRepo}
 	transactionHandler := handler.TransactionHandler{Repo: txRepo, Currency: cfg.DefaultCurrency}
 	attendanceHandler := handler.AttendanceHandler{Repo: attendanceRepo}
@@ -89,8 +93,9 @@ func main() {
 	closingHandler := handler.ClosingHandler{Repo: closingRepo}
 	paymentHandler := handler.PaymentHandler{}
 	homeHandler := handler.HomeHandler{}
+	docsHandler := handler.DocsHandler{OpenAPIPath: "openapi.yaml"}
 
-	router := server.NewRouter(cfg, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, paymentHandler, fcmHandler, homeHandler)
+	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, paymentHandler, fcmHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
 
 	if err := server.Start(ctx, cfg, router, logger); err != nil {
 		logger.Error("server error", "err", err)

@@ -521,6 +521,92 @@ paths:
       responses:
         '200':
           description: Saved
+  /stock:
+    get:
+      summary: List stock
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+  /stock/adjust:
+    post:
+      summary: Adjust stock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stockId: { type: integer }
+                change: { type: integer }
+                type: { type: string }
+                note: { type: string }
+                productId: { type: integer }
+      responses:
+        '200':
+          description: OK
+  /stock/{id}/history:
+    get:
+      summary: Stock history
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List
+  /employees:
+    get:
+      summary: List employees
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+    post:
+      summary: Upsert employee
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: integer }
+                name: { type: string }
+                role: { type: string }
+                phone: { type: string }
+                email: { type: string }
+                joinDate: { type: string, example: 2025-01-01 }
+                commission: { type: number, format: float }
+                active: { type: boolean }
+      responses:
+        '200':
+          description: Saved
+  /employees/{id}:
+    delete:
+      summary: Delete employee
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Deleted
   /notifications/token:
     post:
       summary: Register FCM token

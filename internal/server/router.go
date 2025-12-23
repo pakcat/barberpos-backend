@@ -10,10 +10,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
+	"log/slog"
 )
 
 // NewRouter wires HTTP routes and middleware.
 func NewRouter(cfg config.Config,
+	logger *slog.Logger,
 	health handler.HealthHandler,
 	auth handler.AuthHandler,
 	products handler.ProductHandler,
@@ -29,12 +31,15 @@ func NewRouter(cfg config.Config,
 	closing handler.ClosingHandler,
 	payments handler.PaymentHandler,
 	fcm handler.FCMHandler,
+	stocks handler.StockHandler,
+	employees handler.EmployeeHandler,
+	docs handler.DocsHandler,
 	home handler.HomeHandler,
 ) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(NewLoggerMiddleware(logger))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(httprate.LimitByIP(200, 1*time.Minute))
@@ -42,6 +47,7 @@ func NewRouter(cfg config.Config,
 	health.RegisterRoutes(r)
 	auth.RegisterRoutes(r)
 	home.RegisterRoutes(r)
+	docs.RegisterRoutes(r)
 
 	r.Group(func(pr chi.Router) {
 		pr.Use(AuthMiddleware(cfg.JWTSecret))
@@ -65,6 +71,8 @@ func NewRouter(cfg config.Config,
 			settings.RegisterRoutes(mr)
 			finance.RegisterRoutes(mr)
 			membership.RegisterRoutes(mr)
+			stocks.RegisterRoutes(mr)
+			employees.RegisterRoutes(mr)
 		})
 	})
 
