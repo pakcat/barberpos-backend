@@ -1,0 +1,671 @@
+openapi: 3.0.3
+info:
+  title: BarberPOS Backend API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /auth/register:
+    post:
+      summary: Register with email/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+  /auth/login:
+    post:
+      summary: Login with email/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+  /auth/google:
+    post:
+      summary: Login/Register with Google (idToken)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+  /auth/forgot-password:
+    post:
+      summary: Request reset code (dummy 1234)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Code sent
+  /auth/reset-password:
+    post:
+      summary: Reset password (dummy success if token==1234)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /products:
+    get:
+      summary: List products/services
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+    post:
+      summary: Upsert product (manager/admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '200':
+          description: Saved
+  /products/{id}:
+    delete:
+      summary: Soft delete product (manager/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+  /services:
+    get:
+      summary: List services (same as products)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+  /categories:
+    get:
+      summary: List categories
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+    post:
+      summary: Upsert category
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Saved
+  /categories/{id}:
+    delete:
+      summary: Delete category
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Deleted
+  /customers:
+    get:
+      summary: List customers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+    post:
+      summary: Upsert customer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Customer'
+      responses:
+        '200':
+          description: Saved
+  /customers/{id}:
+    delete:
+      summary: Delete customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Deleted
+  /orders:
+    post:
+      summary: Create order/transaction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+      responses:
+        '200':
+          description: Created
+  /transactions:
+    get:
+      summary: List transactions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+  /payments/qris:
+    post:
+      summary: Create QRIS payment intent (dummy)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+      responses:
+        '200':
+          description: Created
+  /payments/card:
+    post:
+      summary: Create card payment intent (dummy)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Created
+  /attendance/checkin:
+    post:
+      summary: Check-in attendance
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                employeeId:
+                  type: integer
+                  format: int64
+                employeeName:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /attendance/checkout:
+    post:
+      summary: Check-out attendance
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                employeeId:
+                  type: integer
+                  format: int64
+                employeeName:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /attendance:
+    get:
+      summary: Get attendance for month
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: employeeName
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: month
+          required: true
+          schema:
+            type: string
+            example: 2025-01
+      responses:
+        '200':
+          description: List
+  /dashboard/summary:
+    get:
+      summary: Dashboard summary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Summary
+  /dashboard/top-services:
+    get:
+      summary: Top services
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+  /dashboard/top-staff:
+    get:
+      summary: Top staff
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+  /dashboard/sales:
+    get:
+      summary: Sales time series
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [7d, 30d]
+      responses:
+        '200':
+          description: Series
+  /closing/summary:
+    get:
+      summary: Closing summary (today)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Summary
+  /closing:
+    post:
+      summary: Submit closing
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tanggal:
+                  type: string
+                  example: 2025-01-01
+                shift:
+                  type: string
+                karyawan:
+                  type: string
+                shiftId:
+                  type: string
+                operatorName:
+                  type: string
+                total:
+                  type: integer
+                status:
+                  type: string
+                catatan:
+                  type: string
+                fisik:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /settings:
+    get:
+      summary: Get settings
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Settings
+    put:
+      summary: Update settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Settings'
+      responses:
+        '200':
+          description: Saved
+  /finance:
+    get:
+      summary: List finance entries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+    post:
+      summary: Create finance entry
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinanceEntry'
+      responses:
+        '200':
+          description: Saved
+  /membership:
+    get:
+      summary: Get membership state
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: State
+    put:
+      summary: Update membership state
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usedQuota:
+                  type: integer
+      responses:
+        '200':
+          description: Saved
+  /membership/topups:
+    get:
+      summary: List membership topups
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+    post:
+      summary: Create membership topup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                manager:
+                  type: string
+                note:
+                  type: string
+                date:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Saved
+  /notifications/token:
+    post:
+      summary: Register FCM token
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                platform:
+                  type: string
+      responses:
+        '200':
+          description: Saved
+  /posts/1:
+    get:
+      summary: Welcome placeholder
+      responses:
+        '200':
+          description: Welcome
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterRequest:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        password: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        region: { type: string }
+        role: { type: string, example: manager }
+    LoginRequest:
+      type: object
+      properties:
+        email: { type: string }
+        password: { type: string }
+    GoogleLoginRequest:
+      type: object
+      properties:
+        idToken: { type: string }
+        email: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        region: { type: string }
+    AuthResponse:
+      type: object
+      properties:
+        token: { type: string }
+        refreshToken: { type: string }
+        expiresAt: { type: string }
+        user:
+          $ref: '#/components/schemas/User'
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        region: { type: string }
+        isGoogle: { type: boolean }
+    Product:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        category: { type: string }
+        price: { type: integer }
+        image: { type: string }
+        trackStock: { type: boolean }
+        stock: { type: integer }
+        minStock: { type: integer }
+    Customer:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        address: { type: string }
+    OrderRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              category: { type: string }
+              price: { type: integer }
+              qty: { type: integer }
+        total: { type: integer }
+        paid: { type: integer }
+        change: { type: integer }
+        paymentMethod: { type: string }
+        stylist: { type: string }
+        customer: { type: string }
+        shiftId: { type: string }
+    Settings:
+      type: object
+      properties:
+        businessName: { type: string }
+        businessAddress: { type: string }
+        businessPhone: { type: string }
+        receiptFooter: { type: string }
+        defaultPaymentMethod: { type: string }
+        printerName: { type: string }
+        paperSize: { type: string }
+        autoPrint: { type: boolean }
+        notifications: { type: boolean }
+        trackStock: { type: boolean }
+        roundingPrice: { type: boolean }
+        autoBackup: { type: boolean }
+        cashierPin: { type: boolean }
+        currencyCode: { type: string }
+    FinanceEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        amount: { type: integer }
+        category: { type: string }
+        date: { type: string }
+        type: { type: string, enum: [revenue, expense] }
+        note: { type: string }
+        staff: { type: string }
+        service: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+        message: { type: string }
