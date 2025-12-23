@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"barberpos-backend/internal/config"
@@ -25,6 +26,7 @@ var (
 type AuthService struct {
 	Config       config.Config
 	Users        repository.UserRepository
+	Employees    repository.EmployeeRepository
 	Logger       *slog.Logger
 	FirebaseAuth *fbauth.Client
 }
@@ -58,6 +60,13 @@ type GoogleLoginInput struct {
 	Phone   string
 	Address string
 	Region  string
+}
+
+type EmployeeLoginInput struct {
+	Phone string
+	Email string
+	Name  string
+	Pin   string
 }
 
 type RefreshInput struct {
@@ -142,6 +151,57 @@ func (s AuthService) LoginWithGoogle(ctx context.Context, in GoogleLoginInput) (
 			return nil, err
 		}
 	}
+	return s.issueTokens(user)
+}
+
+// LoginEmployee authenticates active employees (stylist/staff) by phone or email and issues staff tokens.
+// This avoids password/PIN for now; can be extended with a PIN column when needed.
+func (s AuthService) LoginEmployee(ctx context.Context, in EmployeeLoginInput) (*AuthResult, error) {
+	if (in.Phone == "" && in.Email == "") || in.Pin == "" {
+		return nil, ErrInvalidCredentials
+	}
+	emp, err := s.Employees.GetByPhoneOrEmail(ctx, in.Phone, in.Email)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, err
+	}
+	if !emp.Active {
+		return nil, ErrInvalidCredentials
+	}
+	if emp.PinHash == nil || bcrypt.CompareHashAndPassword([]byte(*emp.PinHash), []byte(in.Pin)) != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	// Ensure a corresponding user exists so refresh tokens keep working.
+	user, err := s.Users.GetByEmail(ctx, strings.ToLower(emp.Email))
+	if err != nil {
+		if !errors.Is(err, repository.ErrNotFound) {
+			return nil, err
+		}
+		user, err = s.Users.Create(ctx, repository.CreateUserParams{
+			Name:         emp.Name,
+			Email:        strings.ToLower(emp.Email),
+			Phone:        emp.Phone,
+			Address:      "", // employees table has no address; leave blank
+			Region:       "",
+			Role:         domain.RoleStaff,
+			PasswordHash: nil,
+			IsGoogle:     false,
+		})
+		if err != nil {
+			if repository.IsDuplicate(err) {
+				user, err = s.Users.GetByEmail(ctx, strings.ToLower(emp.Email))
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, err
+			}
+		}
+	}
+	user.Role = domain.RoleStaff // enforce staff role for employee login
 	return s.issueTokens(user)
 }
 

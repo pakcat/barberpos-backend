@@ -7,6 +7,7 @@ import (
 
 	"barberpos-backend/internal/db"
 	"barberpos-backend/internal/domain"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -17,6 +18,7 @@ type TransactionRepository struct {
 type CreateTransactionInput struct {
 	PaymentMethod     string
 	Stylist           string
+	StylistID         *int64
 	CustomerName      string
 	CustomerPhone     string
 	CustomerEmail     string
@@ -37,7 +39,7 @@ type CreateTransactionItem struct {
 	Qty       int
 }
 
-func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionInput) (*domain.Transaction, error) {
+func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionInput, after func(context.Context, pgx.Tx) error) (*domain.Transaction, error) {
 	tx, err := r.DB.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -53,12 +55,12 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transactions
-		(code, transacted_date, transacted_time, amount, payment_method, status, stylist,
+		(code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		 customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
 		 shift_id, operator_name, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, now(), now())
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, now(), now())
 		RETURNING id
-	`, code, now.Format("2006-01-02"), now.Format("15:04"), in.Amount, in.PaymentMethod, domain.TransactionPaid, in.Stylist,
+	`, code, now.Format("2006-01-02"), now.Format("15:04"), in.Amount, in.PaymentMethod, domain.TransactionPaid, in.Stylist, in.StylistID,
 		in.CustomerName, in.CustomerPhone, in.CustomerEmail, in.CustomerAddr, in.CustomerVisits, in.CustomerLastVisit,
 		in.ShiftID, in.OperatorName).Scan(&id)
 	if err != nil {
@@ -71,6 +73,12 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 			VALUES ($1,$2,$3,$4,$5,$6, now())
 		`, id, item.ProductID, item.Name, item.Category, item.Price, item.Qty)
 		if err != nil {
+			return nil, err
+		}
+	}
+
+	if after != nil {
+		if err := after(ctx, tx); err != nil {
 			return nil, err
 		}
 	}
@@ -88,6 +96,7 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 		PaymentMethod: in.PaymentMethod,
 		Status:        domain.TransactionPaid,
 		Stylist:       in.Stylist,
+		StylistID:     in.StylistID,
 		Customer: &domain.TransactionCustomerSnapshot{
 			Name:      in.CustomerName,
 			Phone:     in.CustomerPhone,
@@ -118,7 +127,7 @@ func mapItems(items []CreateTransactionItem) []domain.TransactionItem {
 
 func (r TransactionRepository) List(ctx context.Context, limit int) ([]domain.Transaction, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
-		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist,
+		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
 		       shift_id, operator_name, created_at, updated_at
 		FROM transactions
@@ -141,15 +150,17 @@ func (r TransactionRepository) List(ctx context.Context, limit int) ([]domain.Tr
 		var lastVisit pgtype.Text
 		var shiftID pgtype.Text
 		var opName pgtype.Text
+		var stylistID pgtype.Int8
 		if err := rows.Scan(
-			&t.ID, &t.Code, &t.Date, &t.Time, &t.Amount.Amount, &t.PaymentMethod, &status, &t.Stylist,
+			&t.ID, &t.Code, &t.Date, &t.Time, &t.Amount.Amount, &t.PaymentMethod, &status, &t.Stylist, &stylistID,
 			&customerName, &customerPhone, &customerEmail, &customerAddress, &visits, &lastVisit,
 			&shiftID, &opName, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
-		_ = shiftID
-		_ = opName
+		if stylistID.Valid {
+			t.StylistID = &stylistID.Int64
+		}
 		t.Status = domain.TransactionStatus(status)
 		t.Customer = &domain.TransactionCustomerSnapshot{
 			Name:    customerName.String,

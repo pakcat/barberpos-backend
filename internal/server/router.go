@@ -24,6 +24,7 @@ func NewRouter(cfg config.Config,
 	productsAdmin handler.ProductAdminHandler,
 	categories handler.CategoryHandler,
 	customers handler.CustomerHandler,
+	regions handler.RegionHandler,
 	settings handler.SettingsHandler,
 	finance handler.FinanceHandler,
 	membership handler.MembershipHandler,
@@ -57,6 +58,7 @@ func NewRouter(cfg config.Config,
 	health.RegisterRoutes(r)
 	auth.RegisterRoutes(r)
 	home.RegisterRoutes(r)
+	regions.RegisterRoutes(r)
 	docs.RegisterRoutes(r)
 	r.Method("GET", "/metrics", promhttp.Handler())
 

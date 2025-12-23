@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type MembershipHandler struct {
-	Repo repository.MembershipRepository
+	Service *service.MembershipService
 }
 
 func (h MembershipHandler) RegisterRoutes(r chi.Router) {
@@ -21,12 +22,17 @@ func (h MembershipHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h MembershipHandler) state(w http.ResponseWriter, r *http.Request) {
-	s, err := h.Repo.GetState(r.Context())
+	s, err := h.Service.GetState(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"usedQuota": s.UsedQuota})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"usedQuota":    s.UsedQuota,
+		"freeUsed":     s.FreeUsed,
+		"freeQuota":    1000,
+		"topupBalance": s.TopupBal,
+	})
 }
 
 func (h MembershipHandler) updateState(w http.ResponseWriter, r *http.Request) {
@@ -37,16 +43,21 @@ func (h MembershipHandler) updateState(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
-	s, err := h.Repo.SaveState(r.Context(), req.UsedQuota)
+	s, err := h.Service.SetUsedQuota(r.Context(), req.UsedQuota)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"usedQuota": s.UsedQuota})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"usedQuota":    s.UsedQuota,
+		"freeUsed":     s.FreeUsed,
+		"freeQuota":    1000,
+		"topupBalance": s.TopupBal,
+	})
 }
 
 func (h MembershipHandler) listTopups(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Repo.ListTopups(r.Context(), 200)
+	items, err := h.Service.Repo.ListTopups(r.Context(), 200)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -85,7 +96,7 @@ func (h MembershipHandler) createTopup(w http.ResponseWriter, r *http.Request) {
 			dt = t
 		}
 	}
-	topup, err := h.Repo.CreateTopup(r.Context(), repository.CreateTopupInput{
+	topup, err := h.Service.Repo.CreateTopup(r.Context(), repository.CreateTopupInput{
 		Amount:  req.Amount,
 		Manager: req.Manager,
 		Note:    req.Note,

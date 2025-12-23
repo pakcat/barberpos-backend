@@ -60,6 +60,7 @@ func main() {
 	productRepo := repository.ProductRepository{DB: pg}
 	categoryRepo := repository.CategoryRepository{DB: pg}
 	customerRepo := repository.CustomerRepository{DB: pg}
+	regionRepo := repository.RegionRepository{DB: pg}
 	settingsRepo := repository.SettingsRepository{DB: pg}
 	financeRepo := repository.FinanceRepository{DB: pg}
 	membershipRepo := repository.MembershipRepository{DB: pg}
@@ -72,7 +73,14 @@ func main() {
 	closingRepo := repository.ClosingRepository{DB: pg}
 
 	// services
-	authSvc := service.AuthService{Config: cfg, Users: userRepo, Logger: logger, FirebaseAuth: firebaseAuth}
+	authSvc := service.AuthService{
+		Config:       cfg,
+		Users:        userRepo,
+		Employees:    employeeRepo,
+		Logger:       logger,
+		FirebaseAuth: firebaseAuth,
+	}
+	membershipSvc := service.MembershipService{Repo: membershipRepo}
 
 	// handlers
 	healthHandler := handler.HealthHandler{DB: pg}
@@ -81,13 +89,14 @@ func main() {
 	productAdminHandler := handler.ProductAdminHandler{Repo: productRepo}
 	categoryHandler := handler.CategoryHandler{Repo: categoryRepo}
 	customerHandler := handler.CustomerHandler{Repo: customerRepo}
+	regionHandler := handler.RegionHandler{Repo: regionRepo}
 	settingsHandler := handler.SettingsHandler{Repo: settingsRepo}
 	financeHandler := handler.FinanceHandler{Repo: financeRepo}
-	membershipHandler := handler.MembershipHandler{Repo: membershipRepo}
+	membershipHandler := handler.MembershipHandler{Service: &membershipSvc}
 	stockHandler := handler.StockHandler{Repo: stockRepo}
 	employeeHandler := handler.EmployeeHandler{Repo: employeeRepo}
 	fcmHandler := handler.FCMHandler{Repo: fcmRepo}
-	transactionHandler := handler.TransactionHandler{Repo: txRepo, Currency: cfg.DefaultCurrency}
+	transactionHandler := handler.TransactionHandler{Repo: txRepo, Currency: cfg.DefaultCurrency, Membership: &membershipSvc}
 	attendanceHandler := handler.AttendanceHandler{Repo: attendanceRepo}
 	dashboardHandler := handler.DashboardHandler{Repo: dashboardRepo}
 	closingHandler := handler.ClosingHandler{Repo: closingRepo}
@@ -95,7 +104,7 @@ func main() {
 	homeHandler := handler.HomeHandler{}
 	docsHandler := handler.DocsHandler{OpenAPIPath: "openapi.yaml"}
 
-	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, paymentHandler, fcmHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
+	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, regionHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, paymentHandler, fcmHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
 
 	if err := server.Start(ctx, cfg, router, logger); err != nil {
 		logger.Error("server error", "err", err)

@@ -9,6 +9,7 @@ import (
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type EmployeeHandler struct {
@@ -50,6 +51,7 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		Role       string   `json:"role"`
 		Phone      string   `json:"phone"`
 		Email      string   `json:"email"`
+		Pin        string   `json:"pin"`
 		JoinDate   string   `json:"joinDate"`
 		Commission *float64 `json:"commission"`
 		Active     *bool    `json:"active"`
@@ -60,6 +62,10 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.ID == nil && req.Pin == "" {
+		writeError(w, http.StatusBadRequest, "pin is required")
 		return
 	}
 	joinDate := time.Now()
@@ -83,6 +89,14 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ID != nil {
 		e.ID = *req.ID
+	}
+	if req.Pin != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Pin), bcrypt.DefaultCost)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to hash pin")
+			return
+		}
+		e.PinHash = ptr(string(hash))
 	}
 	saved, err := h.Repo.Upsert(r.Context(), e)
 	if err != nil {
@@ -114,3 +128,5 @@ func (h EmployeeHandler) delete(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
+
+func ptr[T any](v T) *T { return &v }

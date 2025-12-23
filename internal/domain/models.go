@@ -161,6 +161,7 @@ type Employee struct {
 	Role       string
 	Phone      string
 	Email      string
+	PinHash    *string
 	JoinDate   time.Time
 	Commission *float64
 	Active     bool
@@ -201,6 +202,9 @@ type FinanceEntry struct {
 type MembershipState struct {
 	TenantID  *int64
 	UsedQuota int
+	FreeUsed  int
+	FreeStart time.Time
+	TopupBal  int
 	UpdatedAt time.Time
 }
 
@@ -225,6 +229,7 @@ type Transaction struct {
 	PaymentMethod    string
 	ShiftID          *string
 	OperatorName     string
+	StylistID        *int64
 	PaymentIntentID  *string
 	PaymentReference *string
 	Status           TransactionStatus

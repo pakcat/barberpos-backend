@@ -59,6 +59,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
+  /auth/staff:
+    post:
+      summary: Login staff/employee (by phone or email)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffLoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
   /auth/refresh:
     post:
       summary: Refresh access token
@@ -110,6 +126,18 @@ paths:
       responses:
         '200':
           description: OK
+  /regions:
+    get:
+      summary: List regions
+      responses:
+        '200':
+          description: List of regions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Region'
   /products:
     get:
       summary: List products/services
@@ -259,6 +287,25 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    code: { type: string }
+                    date: { type: string }
+                    time: { type: string }
+                    amount: { type: integer }
+                    paymentMethod: { type: string }
+                    status: { type: string }
+                    stylistId: { type: integer, format: int64 }
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/OrderRequest'
   /payments/qris:
     post:
       summary: Create QRIS payment intent (dummy)
@@ -474,6 +521,10 @@ paths:
       responses:
         '200':
           description: State
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipState'
     put:
       summary: Update membership state
       security:
@@ -490,6 +541,10 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipState'
   /membership/topups:
     get:
       summary: List membership topups
@@ -587,6 +642,7 @@ paths:
                 role: { type: string }
                 phone: { type: string }
                 email: { type: string }
+                pin: { type: string, description: "Set/replace PIN (store as hash)" }
                 joinDate: { type: string, example: 2025-01-01 }
                 commission: { type: number, format: float }
                 active: { type: boolean }
@@ -655,6 +711,13 @@ components:
       properties:
         email: { type: string }
         password: { type: string }
+    StaffLoginRequest:
+      type: object
+      properties:
+        phone: { type: string }
+        email: { type: string }
+        name: { type: string }
+        pin: { type: string, description: "Employee PIN" }
     GoogleLoginRequest:
       type: object
       properties:
@@ -702,6 +765,11 @@ components:
         phone: { type: string }
         email: { type: string }
         address: { type: string }
+    Region:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
     OrderRequest:
       type: object
       properties:
@@ -719,8 +787,16 @@ components:
         change: { type: integer }
         paymentMethod: { type: string }
         stylist: { type: string }
+        stylistId: { type: integer, format: int64 }
         customer: { type: string }
         shiftId: { type: string }
+    MembershipState:
+      type: object
+      properties:
+        usedQuota: { type: integer }
+        freeUsed: { type: integer }
+        freeQuota: { type: integer, example: 1000 }
+        topupBalance: { type: integer }
     Settings:
       type: object
       properties:

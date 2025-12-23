@@ -20,6 +20,7 @@ func (h AuthHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/auth/register", h.register)
 	r.Post("/auth/login", h.login)
 	r.Post("/auth/google", h.loginGoogle)
+	r.Post("/auth/staff", h.loginStaff)
 	r.Post("/auth/refresh", h.refresh)
 	r.Post("/auth/forgot-password", h.forgotPassword)
 	r.Post("/auth/reset-password", h.resetPassword)
@@ -99,6 +100,31 @@ func (h AuthHandler) loginGoogle(w http.ResponseWriter, r *http.Request) {
 		Phone:   req.Phone,
 		Address: req.Address,
 		Region:  req.Region,
+	})
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	writeAuthResponse(w, res)
+}
+
+// loginStaff authenticates active employees (stylists) by phone or email (no password yet).
+func (h AuthHandler) loginStaff(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Phone string `json:"phone"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+		Pin   string `json:"pin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+	res, err := h.Service.LoginEmployee(r.Context(), service.EmployeeLoginInput{
+		Phone: req.Phone,
+		Email: strings.ToLower(req.Email),
+		Name:  req.Name,
+		Pin:   req.Pin,
 	})
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, err.Error())

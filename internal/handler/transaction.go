@@ -1,18 +1,22 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/service"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type TransactionHandler struct {
-	Repo     repository.TransactionRepository
-	Currency string
+	Repo       repository.TransactionRepository
+	Currency   string
+	Membership *service.MembershipService
 }
 
 func (h TransactionHandler) RegisterRoutes(r chi.Router) {
@@ -27,6 +31,7 @@ type orderPayload struct {
 	Change        int64       `json:"change"`
 	PaymentMethod string      `json:"paymentMethod"`
 	Stylist       string      `json:"stylist"`
+	StylistID     *int64      `json:"stylistId"`
 	Customer      string      `json:"customer"`
 	ShiftID       string      `json:"shiftId"`
 }
@@ -55,13 +60,22 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 
+	unitsToConsume := countUnits(req.Items)
+
 	tx, err := h.Repo.Create(r.Context(), repository.CreateTransactionInput{
 		PaymentMethod: req.PaymentMethod,
 		Stylist:       req.Stylist,
+		StylistID:     req.StylistID,
 		CustomerName:  req.Customer,
 		Amount:        req.Total,
 		Items:         items,
 		ShiftID:       strPtr(req.ShiftID),
+	}, func(ctx context.Context, tx pgx.Tx) error {
+		if h.Membership == nil {
+			return nil
+		}
+		_, err := h.Membership.ConsumeWithTx(ctx, tx, unitsToConsume)
+		return err
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -112,6 +126,7 @@ func (h TransactionHandler) listTransactions(w http.ResponseWriter, r *http.Requ
 			"amount":        t.Amount.Amount,
 			"paymentMethod": t.PaymentMethod,
 			"status":        string(t.Status),
+			"stylistId":     t.StylistID,
 			"items":         toOrderLines(t.Items),
 			"customer":      customer,
 		})
@@ -137,4 +152,15 @@ func strPtr(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+func countUnits(items []orderLine) int {
+	sum := 0
+	for _, it := range items {
+		sum += it.Qty
+	}
+	if sum == 0 {
+		return 1
+	}
+	return sum
 }
