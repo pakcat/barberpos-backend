@@ -1,4 +1,8 @@
 -- +goose Up
+-- Make sure required constraints/columns exist even on older databases
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT '';
+
 -- Ensure unique constraints for seeds
 CREATE UNIQUE INDEX IF NOT EXISTS idx_regions_name ON regions (name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name ON categories (name);
