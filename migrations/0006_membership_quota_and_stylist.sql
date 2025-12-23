@@ -5,6 +5,7 @@ ALTER TABLE membership_state
     ADD COLUMN IF NOT EXISTS topup_balance INTEGER NOT NULL DEFAULT 0;
 
 -- Attempt to reconcile existing data into new columns
+-- +goose StatementBegin
 DO $$
 DECLARE
     total_topups INTEGER := (SELECT COALESCE(SUM(amount), 0) FROM membership_topups WHERE deleted_at IS NULL);
@@ -27,6 +28,7 @@ BEGIN
             topup_balance = EXCLUDED.topup_balance,
             updated_at = now();
 END $$;
+-- +goose StatementEnd
 
 ALTER TABLE transactions
     ADD COLUMN IF NOT EXISTS stylist_id BIGINT REFERENCES employees(id) ON DELETE SET NULL;
