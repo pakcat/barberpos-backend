@@ -21,7 +21,7 @@ func (h SettingsHandler) RegisterRoutes(r chi.Router) {
 func (h SettingsHandler) get(w http.ResponseWriter, r *http.Request) {
 	s, err := h.Repo.Get(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, toSettingsResponse(s))
@@ -30,12 +30,12 @@ func (h SettingsHandler) get(w http.ResponseWriter, r *http.Request) {
 func (h SettingsHandler) save(w http.ResponseWriter, r *http.Request) {
 	var req domain.Settings
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	s, err := h.Repo.Save(r.Context(), req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, toSettingsResponse(s))

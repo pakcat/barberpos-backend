@@ -1,10 +1,11 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
-	"log/slog"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // NewLoggerMiddleware returns a middleware that logs requests via slog.
@@ -17,6 +18,8 @@ func NewLoggerMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
 			log.Info("http_request",
 				"method", r.Method,
 				"path", r.URL.Path,
+				"request_id", r.Context().Value(middleware.RequestIDKey),
+				"remote", r.RemoteAddr,
 				"status", ww.status,
 				"duration_ms", time.Since(start).Milliseconds(),
 			)

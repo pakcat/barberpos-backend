@@ -9,7 +9,9 @@ import (
 	"barberpos-backend/internal/handler"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log/slog"
 )
 
@@ -42,12 +44,21 @@ func NewRouter(cfg config.Config,
 	r.Use(NewLoggerMiddleware(logger))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 	r.Use(httprate.LimitByIP(200, 1*time.Minute))
 
 	health.RegisterRoutes(r)
 	auth.RegisterRoutes(r)
 	home.RegisterRoutes(r)
 	docs.RegisterRoutes(r)
+	r.Method("GET", "/metrics", promhttp.Handler())
 
 	r.Group(func(pr chi.Router) {
 		pr.Use(AuthMiddleware(cfg.JWTSecret))

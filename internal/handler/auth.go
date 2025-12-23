@@ -36,7 +36,7 @@ func (h AuthHandler) register(w http.ResponseWriter, r *http.Request) {
 		Role     string `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	res, err := h.Service.Register(r.Context(), service.RegisterInput{
@@ -49,7 +49,7 @@ func (h AuthHandler) register(w http.ResponseWriter, r *http.Request) {
 		Role:     domain.UserRole(req.Role),
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeAuthResponse(w, res)
@@ -61,7 +61,7 @@ func (h AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	res, err := h.Service.Login(r.Context(), service.LoginInput{
@@ -73,7 +73,7 @@ func (h AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 		if err == service.ErrInvalidCredentials {
 			status = http.StatusUnauthorized
 		}
-		http.Error(w, err.Error(), status)
+		writeError(w, status, err.Error())
 		return
 	}
 	writeAuthResponse(w, res)
@@ -89,7 +89,7 @@ func (h AuthHandler) loginGoogle(w http.ResponseWriter, r *http.Request) {
 		Region  string `json:"region"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	res, err := h.Service.LoginWithGoogle(r.Context(), service.GoogleLoginInput{
@@ -101,7 +101,7 @@ func (h AuthHandler) loginGoogle(w http.ResponseWriter, r *http.Request) {
 		Region:  req.Region,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	writeAuthResponse(w, res)
@@ -112,12 +112,12 @@ func (h AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refreshToken"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	res, err := h.Service.Refresh(r.Context(), service.RefreshInput{RefreshToken: req.RefreshToken})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	writeAuthResponse(w, res)
@@ -128,7 +128,7 @@ func (h AuthHandler) forgotPassword(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	code, _ := h.Service.ForgotPassword(r.Context(), strings.ToLower(req.Email))
@@ -141,11 +141,11 @@ func (h AuthHandler) resetPassword(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	if err := h.Service.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

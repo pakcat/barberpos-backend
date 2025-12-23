@@ -22,7 +22,7 @@ func (h ProductHandler) RegisterRoutes(r chi.Router) {
 func (h ProductHandler) listProducts(w http.ResponseWriter, r *http.Request) {
 	items, err := h.Repo.List(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, toProductResponses(items))

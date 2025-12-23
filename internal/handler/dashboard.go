@@ -22,7 +22,7 @@ func (h DashboardHandler) RegisterRoutes(r chi.Router) {
 func (h DashboardHandler) summary(w http.ResponseWriter, r *http.Request) {
 	data, err := h.Repo.Summary(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -35,7 +35,7 @@ func (h DashboardHandler) summary(w http.ResponseWriter, r *http.Request) {
 func (h DashboardHandler) topServices(w http.ResponseWriter, r *http.Request) {
 	items, err := h.Repo.TopServices(r.Context(), 5)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, toDashboardItems(items))
@@ -44,7 +44,7 @@ func (h DashboardHandler) topServices(w http.ResponseWriter, r *http.Request) {
 func (h DashboardHandler) topStaff(w http.ResponseWriter, r *http.Request) {
 	items, err := h.Repo.TopStaff(r.Context(), 5)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, toDashboardItems(items))
@@ -58,7 +58,7 @@ func (h DashboardHandler) sales(w http.ResponseWriter, r *http.Request) {
 	}
 	points, err := h.Repo.SalesSeries(r.Context(), days)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, points)

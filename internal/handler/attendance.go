@@ -25,15 +25,15 @@ func (h AttendanceHandler) checkIn(w http.ResponseWriter, r *http.Request) {
 		EmployeeName string `json:"employeeName"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	if req.EmployeeName == "" {
-		http.Error(w, "employeeName is required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "employeeName is required")
 		return
 	}
 	if err := h.Repo.CheckIn(r.Context(), req.EmployeeName, req.EmployeeID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -45,15 +45,15 @@ func (h AttendanceHandler) checkOut(w http.ResponseWriter, r *http.Request) {
 		EmployeeName string `json:"employeeName"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	if req.EmployeeName == "" {
-		http.Error(w, "employeeName is required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "employeeName is required")
 		return
 	}
 	if err := h.Repo.CheckOut(r.Context(), req.EmployeeName, req.EmployeeID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -63,17 +63,17 @@ func (h AttendanceHandler) listMonth(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("employeeName")
 	monthStr := r.URL.Query().Get("month")
 	if name == "" || monthStr == "" {
-		http.Error(w, "employeeName and month are required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "employeeName and month are required")
 		return
 	}
 	month, err := time.Parse("2006-01", monthStr)
 	if err != nil {
-		http.Error(w, "invalid month format", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid month format")
 		return
 	}
 	items, err := h.Repo.GetMonth(r.Context(), name, month)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	resp := make([]map[string]any, 0, len(items))

@@ -24,12 +24,12 @@ func (h FCMHandler) register(w http.ResponseWriter, r *http.Request) {
 		Platform string `json:"platform"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	req.Token = strings.TrimSpace(req.Token)
 	if req.Token == "" {
-		http.Error(w, "token is required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "token is required")
 		return
 	}
 	user := authctx.FromContext(r.Context())
@@ -42,7 +42,7 @@ func (h FCMHandler) register(w http.ResponseWriter, r *http.Request) {
 		Token:    req.Token,
 		Platform: req.Platform,
 	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

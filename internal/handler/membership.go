@@ -23,7 +23,7 @@ func (h MembershipHandler) RegisterRoutes(r chi.Router) {
 func (h MembershipHandler) state(w http.ResponseWriter, r *http.Request) {
 	s, err := h.Repo.GetState(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"usedQuota": s.UsedQuota})
@@ -34,12 +34,12 @@ func (h MembershipHandler) updateState(w http.ResponseWriter, r *http.Request) {
 		UsedQuota int `json:"usedQuota"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	s, err := h.Repo.SaveState(r.Context(), req.UsedQuota)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"usedQuota": s.UsedQuota})
@@ -48,7 +48,7 @@ func (h MembershipHandler) updateState(w http.ResponseWriter, r *http.Request) {
 func (h MembershipHandler) listTopups(w http.ResponseWriter, r *http.Request) {
 	items, err := h.Repo.ListTopups(r.Context(), 200)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	resp := make([]map[string]any, 0, len(items))
@@ -72,11 +72,11 @@ func (h MembershipHandler) createTopup(w http.ResponseWriter, r *http.Request) {
 		Date    string `json:"date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	if req.Manager == "" {
-		http.Error(w, "manager is required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "manager is required")
 		return
 	}
 	dt := time.Now()
@@ -92,7 +92,7 @@ func (h MembershipHandler) createTopup(w http.ResponseWriter, r *http.Request) {
 		Date:    dt,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

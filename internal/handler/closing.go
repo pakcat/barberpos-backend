@@ -21,7 +21,7 @@ func (h ClosingHandler) RegisterRoutes(r chi.Router) {
 func (h ClosingHandler) summary(w http.ResponseWriter, r *http.Request) {
 	data, err := h.Repo.Summary(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -44,7 +44,7 @@ func (h ClosingHandler) create(w http.ResponseWriter, r *http.Request) {
 		Fisik        string `json:"fisik"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	date := time.Now()
@@ -71,7 +71,7 @@ func (h ClosingHandler) create(w http.ResponseWriter, r *http.Request) {
 		Catatan:      req.Catatan,
 		Fisik:        req.Fisik,
 	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

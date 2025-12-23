@@ -22,7 +22,7 @@ func (h FinanceHandler) RegisterRoutes(r chi.Router) {
 func (h FinanceHandler) list(w http.ResponseWriter, r *http.Request) {
 	items, err := h.Repo.List(r.Context(), 200)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	resp := make([]map[string]any, 0, len(items))
@@ -54,11 +54,11 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 		Service  *string `json:"service"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	if req.Title == "" {
-		http.Error(w, "title is required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
 	dt := time.Now()
@@ -78,7 +78,7 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 		Service:  req.Service,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

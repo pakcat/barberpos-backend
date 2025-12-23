@@ -41,7 +41,7 @@ type orderLine struct {
 func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) {
 	var req orderPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 		ShiftID:       strPtr(req.ShiftID),
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 func (h TransactionHandler) listTransactions(w http.ResponseWriter, r *http.Request) {
 	txs, err := h.Repo.List(r.Context(), 200)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	resp := make([]map[string]any, 0, len(txs))
