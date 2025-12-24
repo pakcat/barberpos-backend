@@ -71,6 +71,19 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
+	if req.Role == "" {
+		writeError(w, http.StatusBadRequest, "role is required")
+		return
+	}
+	allowedRoles := map[string]struct{}{
+		"Admin":  {},
+		"Kasir":  {},
+		"Barber": {},
+	}
+	if _, ok := allowedRoles[req.Role]; !ok {
+		writeError(w, http.StatusBadRequest, "invalid role")
+		return
+	}
 	if req.ID == nil && req.Pin == "" {
 		writeError(w, http.StatusBadRequest, "pin is required")
 		return

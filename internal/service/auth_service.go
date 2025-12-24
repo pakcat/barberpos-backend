@@ -178,24 +178,44 @@ func (s AuthService) LoginEmployee(ctx context.Context, in EmployeeLoginInput) (
 	}
 
 	// Ensure a corresponding user exists so refresh tokens keep working.
-	user, err := s.Users.GetByEmail(ctx, strings.ToLower(emp.Email))
+	userEmail := strings.ToLower(strings.TrimSpace(emp.Email))
+	if userEmail == "" {
+		phone := strings.TrimSpace(emp.Phone)
+		if phone == "" {
+			userEmail = fmt.Sprintf("staff-%d@barberpos.local", emp.ID)
+		} else {
+			// Keep only digits so the derived email is stable and unique-ish per phone number.
+			digits := make([]rune, 0, len(phone))
+			for _, r := range phone {
+				if r >= '0' && r <= '9' {
+					digits = append(digits, r)
+				}
+			}
+			if len(digits) == 0 {
+				userEmail = fmt.Sprintf("staff-%d@barberpos.local", emp.ID)
+			} else {
+				userEmail = fmt.Sprintf("staff+%s@barberpos.local", string(digits))
+			}
+		}
+	}
+	user, err := s.Users.GetByEmail(ctx, userEmail)
 	if err != nil {
 		if !errors.Is(err, repository.ErrNotFound) {
 			return nil, err
 		}
 		user, err = s.Users.Create(ctx, repository.CreateUserParams{
 			Name:         emp.Name,
-			Email:        strings.ToLower(emp.Email),
+			Email:        userEmail,
 			Phone:        emp.Phone,
 			Address:      "", // employees table has no address; leave blank
 			Region:       "",
 			Role:         domain.RoleStaff,
-			PasswordHash: nil,
+			PasswordHash: emp.PinHash,
 			IsGoogle:     false,
 		})
 		if err != nil {
 			if repository.IsDuplicate(err) {
-				user, err = s.Users.GetByEmail(ctx, strings.ToLower(emp.Email))
+				user, err = s.Users.GetByEmail(ctx, userEmail)
 				if err != nil {
 					return nil, err
 				}
@@ -203,6 +223,12 @@ func (s AuthService) LoginEmployee(ctx context.Context, in EmployeeLoginInput) (
 				return nil, err
 			}
 		}
+	}
+
+	// Backfill password_hash if an existing staff user was created without it (older bug).
+	if user.PasswordHash == nil && emp.PinHash != nil {
+		_ = s.Users.UpdatePassword(ctx, user.ID, *emp.PinHash)
+		user.PasswordHash = emp.PinHash
 	}
 	user.Role = domain.RoleStaff // enforce staff role for employee login
 	return s.issueTokens(user)
