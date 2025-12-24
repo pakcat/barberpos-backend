@@ -124,9 +124,11 @@ func (r DashboardRepository) SalesSeries(ctx context.Context, ownerUserID int64,
 	var points []SalesPoint
 	for rows.Next() {
 		var p SalesPoint
-		if err := rows.Scan(&p.Label, &p.Amount); err != nil {
+		var date time.Time
+		if err := rows.Scan(&date, &p.Amount); err != nil {
 			return nil, err
 		}
+		p.Label = date.Format("2006-01-02")
 		points = append(points, p)
 	}
 	return points, rows.Err()
