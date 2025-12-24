@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
 type ClosingHandler struct {
-	Repo repository.ClosingRepository
+	Repo      repository.ClosingRepository
+	Employees repository.EmployeeRepository
 }
 
 func (h ClosingHandler) RegisterRoutes(r chi.Router) {
@@ -21,7 +23,17 @@ func (h ClosingHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h ClosingHandler) summary(w http.ResponseWriter, r *http.Request) {
-	data, err := h.Repo.Summary(r.Context())
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	data, err := h.Repo.Summary(r.Context(), ownerID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -34,6 +46,16 @@ func (h ClosingHandler) summary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h ClosingHandler) create(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	var req struct {
 		Tanggal      string `json:"tanggal"`
 		Shift        string `json:"shift"`
@@ -62,7 +84,7 @@ func (h ClosingHandler) create(w http.ResponseWriter, r *http.Request) {
 	if req.Status == "" {
 		req.Status = "closed"
 	}
-	id, err := h.Repo.Create(r.Context(), repository.CreateClosingInput{
+	id, err := h.Repo.Create(r.Context(), ownerID, repository.CreateClosingInput{
 		Tanggal:      date,
 		Shift:        req.Shift,
 		Karyawan:     req.Karyawan,
@@ -81,13 +103,23 @@ func (h ClosingHandler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h ClosingHandler) list(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	limit := 50
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
-	items, err := h.Repo.List(r.Context(), limit)
+	items, err := h.Repo.List(r.Context(), ownerID, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

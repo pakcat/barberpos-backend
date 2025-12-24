@@ -6,11 +6,13 @@ import (
 	"time"
 
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
 type AttendanceHandler struct {
-	Repo repository.AttendanceRepository
+	Repo      repository.AttendanceRepository
+	Employees repository.EmployeeRepository
 }
 
 func (h AttendanceHandler) RegisterRoutes(r chi.Router) {
@@ -20,6 +22,16 @@ func (h AttendanceHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h AttendanceHandler) checkIn(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	var req struct {
 		EmployeeID   *int64 `json:"employeeId"`
 		EmployeeName string `json:"employeeName"`
@@ -32,7 +44,7 @@ func (h AttendanceHandler) checkIn(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "employeeName is required")
 		return
 	}
-	if err := h.Repo.CheckIn(r.Context(), req.EmployeeName, req.EmployeeID); err != nil {
+	if err := h.Repo.CheckIn(r.Context(), ownerID, req.EmployeeName, req.EmployeeID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -40,6 +52,16 @@ func (h AttendanceHandler) checkIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h AttendanceHandler) checkOut(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	var req struct {
 		EmployeeID   *int64 `json:"employeeId"`
 		EmployeeName string `json:"employeeName"`
@@ -52,7 +74,7 @@ func (h AttendanceHandler) checkOut(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "employeeName is required")
 		return
 	}
-	if err := h.Repo.CheckOut(r.Context(), req.EmployeeName, req.EmployeeID); err != nil {
+	if err := h.Repo.CheckOut(r.Context(), ownerID, req.EmployeeName, req.EmployeeID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -60,6 +82,16 @@ func (h AttendanceHandler) checkOut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h AttendanceHandler) listMonth(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	name := r.URL.Query().Get("employeeName")
 	monthStr := r.URL.Query().Get("month")
 	if name == "" || monthStr == "" {
@@ -71,7 +103,7 @@ func (h AttendanceHandler) listMonth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid month format")
 		return
 	}
-	items, err := h.Repo.GetMonth(r.Context(), name, month)
+	items, err := h.Repo.GetMonth(r.Context(), ownerID, name, month)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

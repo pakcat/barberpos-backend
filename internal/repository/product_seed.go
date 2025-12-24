@@ -6,7 +6,7 @@ import (
 	"barberpos-backend/internal/domain"
 )
 
-func (r ProductRepository) SeedDefaults(ctx context.Context) error {
+func (r ProductRepository) SeedDefaults(ctx context.Context, ownerUserID int64) error {
 	defaults := []domain.Product{
 		{Name: "Potong Rambut", Category: "Layanan", Price: domain.Money{Amount: 30000}, TrackStock: false, Stock: 0, MinStock: 0},
 		{Name: "Cukur Jenggot", Category: "Layanan", Price: domain.Money{Amount: 20000}, TrackStock: false, Stock: 0, MinStock: 0},
@@ -26,11 +26,11 @@ func (r ProductRepository) SeedDefaults(ctx context.Context) error {
 			stock       int
 		)
 
-		// Idempotent: products.name is unique. Also restores soft-deleted defaults.
+		// Idempotent per owner. Also restores soft-deleted defaults.
 		err := r.DB.Pool.QueryRow(ctx, `
-			INSERT INTO products (name, category, price, image, track_stock, stock, min_stock, created_at, updated_at)
-			VALUES ($1,$2,$3,'',$4,$5,$6, now(), now())
-			ON CONFLICT (name) DO UPDATE SET
+			INSERT INTO products (owner_user_id, name, category, price, image, track_stock, stock, min_stock, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,'',$5,$6,$7, now(), now())
+			ON CONFLICT (owner_user_id, name) DO UPDATE SET
 				category=EXCLUDED.category,
 				price=EXCLUDED.price,
 				image=EXCLUDED.image,
@@ -40,7 +40,7 @@ func (r ProductRepository) SeedDefaults(ctx context.Context) error {
 				updated_at=now(),
 				deleted_at=NULL
 			RETURNING id, name, category, image, track_stock, stock
-		`, p.Name, p.Category, p.Price.Amount, p.TrackStock, p.Stock, p.MinStock).Scan(
+		`, ownerUserID, p.Name, p.Category, p.Price.Amount, p.TrackStock, p.Stock, p.MinStock).Scan(
 			&productID, &name, &category, &image, &trackStock, &stock,
 		)
 		if err != nil {

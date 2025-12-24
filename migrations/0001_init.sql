@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS customers (
 
 CREATE TABLE IF NOT EXISTS products (
     id BIGSERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
+    owner_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT '',
     price BIGINT NOT NULL CHECK (price >= 0),
     image TEXT NOT NULL DEFAULT '',
@@ -55,6 +56,9 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ
 );
+
+CREATE INDEX IF NOT EXISTS idx_products_owner_user_id ON products (owner_user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS products_owner_user_id_name_unique ON products (owner_user_id, name);
 
 CREATE TABLE IF NOT EXISTS stocks (
     id BIGSERIAL PRIMARY KEY,

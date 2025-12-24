@@ -6,6 +6,7 @@ import (
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -19,7 +20,12 @@ func (h SettingsHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h SettingsHandler) get(w http.ResponseWriter, r *http.Request) {
-	s, err := h.Repo.Get(r.Context())
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	s, err := h.Repo.Get(r.Context(), user.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -28,12 +34,17 @@ func (h SettingsHandler) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h SettingsHandler) save(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	var req domain.Settings
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
-	current, err := h.Repo.Get(r.Context())
+	current, err := h.Repo.Get(r.Context(), user.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -41,7 +52,7 @@ func (h SettingsHandler) save(w http.ResponseWriter, r *http.Request) {
 	if req.CurrencyCode == "" {
 		req.CurrencyCode = current.CurrencyCode
 	}
-	s, err := h.Repo.Save(r.Context(), req)
+	s, err := h.Repo.Save(r.Context(), user.ID, req)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

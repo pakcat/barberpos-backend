@@ -7,6 +7,7 @@ import (
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -20,6 +21,11 @@ func (h ProductAdminHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h ProductAdminHandler) upsert(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	var req struct {
 		ID         *int64 `json:"id"`
 		Name       string `json:"name"`
@@ -50,8 +56,12 @@ func (h ProductAdminHandler) upsert(w http.ResponseWriter, r *http.Request) {
 	if req.ID != nil {
 		p.ID = *req.ID
 	}
-	saved, err := h.Repo.Upsert(r.Context(), p)
+	saved, err := h.Repo.Save(r.Context(), user.ID, p)
 	if err != nil {
+		if err == repository.ErrNotFound {
+			writeError(w, http.StatusNotFound, "product not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -68,13 +78,18 @@ func (h ProductAdminHandler) upsert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h ProductAdminHandler) delete(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := h.Repo.Delete(r.Context(), id); err != nil {
+	if err := h.Repo.Delete(r.Context(), user.ID, id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

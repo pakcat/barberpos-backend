@@ -13,14 +13,14 @@ type EmployeeRepository struct {
 	DB *db.Postgres
 }
 
-func (r EmployeeRepository) List(ctx context.Context, limit int) ([]domain.Employee, error) {
+func (r EmployeeRepository) List(ctx context.Context, managerUserID int64, limit int) ([]domain.Employee, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, manager_user_id, name, role, phone, email, pin_hash, join_date, commission, active, created_at, updated_at
 		FROM employees
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND manager_user_id=$1
 		ORDER BY name ASC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, managerUserID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -87,26 +87,36 @@ func (r EmployeeRepository) GetByEmail(ctx context.Context, email string) (*doma
 	return &e, nil
 }
 
-func (r EmployeeRepository) Upsert(ctx context.Context, e domain.Employee) (*domain.Employee, error) {
-	row := r.DB.Pool.QueryRow(ctx, `
-		INSERT INTO employees (id, manager_user_id, name, role, phone, email, pin_hash, join_date, commission, active, created_at, updated_at)
-		VALUES (COALESCE($1, nextval('employees_id_seq')), $2,$3,$4,$5,$6,$7,$8,$9,$10, now(), now())
-		ON CONFLICT (id) DO UPDATE SET
-			manager_user_id=COALESCE(EXCLUDED.manager_user_id, employees.manager_user_id),
-			name=EXCLUDED.name,
-			role=EXCLUDED.role,
-			phone=EXCLUDED.phone,
-			email=EXCLUDED.email,
-			pin_hash=COALESCE(EXCLUDED.pin_hash, employees.pin_hash),
-			join_date=EXCLUDED.join_date,
-			commission=EXCLUDED.commission,
-			active=EXCLUDED.active,
-			updated_at=now(),
-			deleted_at=NULL
-		RETURNING id, manager_user_id, name, role, phone, email, pin_hash, join_date, commission, active, created_at, updated_at
-	`, nullableID(e.ID), e.ManagerID, e.Name, e.Role, e.Phone, e.Email, e.PinHash, e.JoinDate, e.Commission, e.Active)
+func (r EmployeeRepository) Save(ctx context.Context, managerUserID int64, e domain.Employee) (*domain.Employee, error) {
+	var row pgx.Row
+	if e.ID == 0 {
+		row = r.DB.Pool.QueryRow(ctx, `
+			INSERT INTO employees (manager_user_id, name, role, phone, email, pin_hash, join_date, commission, active, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now(), now())
+			RETURNING id, manager_user_id, name, role, phone, email, pin_hash, join_date, commission, active, created_at, updated_at
+		`, managerUserID, e.Name, e.Role, e.Phone, e.Email, e.PinHash, e.JoinDate, e.Commission, e.Active)
+	} else {
+		row = r.DB.Pool.QueryRow(ctx, `
+			UPDATE employees
+			SET name=$1,
+				role=$2,
+				phone=$3,
+				email=$4,
+				pin_hash=COALESCE($5, employees.pin_hash),
+				join_date=$6,
+				commission=$7,
+				active=$8,
+				updated_at=now(),
+				deleted_at=NULL
+			WHERE id=$9 AND manager_user_id=$10
+			RETURNING id, manager_user_id, name, role, phone, email, pin_hash, join_date, commission, active, created_at, updated_at
+		`, e.Name, e.Role, e.Phone, e.Email, e.PinHash, e.JoinDate, e.Commission, e.Active, e.ID, managerUserID)
+	}
 	var managerID pgtype.Int8
 	if err := row.Scan(&e.ID, &managerID, &e.Name, &e.Role, &e.Phone, &e.Email, &e.PinHash, &e.JoinDate, &e.Commission, &e.Active, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	if managerID.Valid {
@@ -115,17 +125,23 @@ func (r EmployeeRepository) Upsert(ctx context.Context, e domain.Employee) (*dom
 	return &e, nil
 }
 
-func (r EmployeeRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.DB.Pool.Exec(ctx, `UPDATE employees SET deleted_at = now() WHERE id=$1`, id)
-	return err
+func (r EmployeeRepository) Delete(ctx context.Context, managerUserID int64, id int64) error {
+	ct, err := r.DB.Pool.Exec(ctx, `UPDATE employees SET deleted_at = now() WHERE id=$1 AND manager_user_id=$2`, id, managerUserID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
-func (r EmployeeRepository) Get(ctx context.Context, id int64) (*domain.Employee, error) {
+func (r EmployeeRepository) Get(ctx context.Context, managerUserID int64, id int64) (*domain.Employee, error) {
 	row := r.DB.Pool.QueryRow(ctx, `
 		SELECT id, manager_user_id, name, role, phone, email, pin_hash, join_date, commission, active, created_at, updated_at
 		FROM employees
-		WHERE id=$1 AND deleted_at IS NULL
-	`, id)
+		WHERE id=$1 AND manager_user_id=$2 AND deleted_at IS NULL
+	`, id, managerUserID)
 	var e domain.Employee
 	var managerID pgtype.Int8
 	if err := row.Scan(&e.ID, &managerID, &e.Name, &e.Role, &e.Phone, &e.Email, &e.PinHash, &e.JoinDate, &e.Commission, &e.Active, &e.CreatedAt, &e.UpdatedAt); err != nil {

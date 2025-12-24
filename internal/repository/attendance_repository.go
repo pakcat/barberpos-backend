@@ -12,38 +12,38 @@ type AttendanceRepository struct {
 	DB *db.Postgres
 }
 
-func (r AttendanceRepository) CheckIn(ctx context.Context, name string, employeeID *int64) error {
+func (r AttendanceRepository) CheckIn(ctx context.Context, ownerUserID int64, name string, employeeID *int64) error {
 	today := time.Now().Format("2006-01-02")
 	_, err := r.DB.Pool.Exec(ctx, `
-		INSERT INTO attendance (employee_id, employee_name, attendance_date, check_in, status, source, created_at)
-		VALUES ($1,$2,$3, now(), 'present', 'cashier', now())
-		ON CONFLICT (employee_name, attendance_date)
+		INSERT INTO attendance (owner_user_id, employee_id, employee_name, attendance_date, check_in, status, source, created_at)
+		VALUES ($1,$2,$3,$4, now(), 'present', 'cashier', now())
+		ON CONFLICT (owner_user_id, employee_name, attendance_date)
 		DO UPDATE SET check_in = EXCLUDED.check_in, status = EXCLUDED.status
-	`, employeeID, name, today)
+	`, ownerUserID, employeeID, name, today)
 	return err
 }
 
-func (r AttendanceRepository) CheckOut(ctx context.Context, name string, employeeID *int64) error {
+func (r AttendanceRepository) CheckOut(ctx context.Context, ownerUserID int64, name string, employeeID *int64) error {
 	today := time.Now().Format("2006-01-02")
 	_, err := r.DB.Pool.Exec(ctx, `
-		INSERT INTO attendance (employee_id, employee_name, attendance_date, check_out, status, source, created_at)
-		VALUES ($1,$2,$3, now(), 'present', 'cashier', now())
-		ON CONFLICT (employee_name, attendance_date)
+		INSERT INTO attendance (owner_user_id, employee_id, employee_name, attendance_date, check_out, status, source, created_at)
+		VALUES ($1,$2,$3,$4, now(), 'present', 'cashier', now())
+		ON CONFLICT (owner_user_id, employee_name, attendance_date)
 		DO UPDATE SET check_out = EXCLUDED.check_out
-	`, employeeID, name, today)
+	`, ownerUserID, employeeID, name, today)
 	return err
 }
 
-func (r AttendanceRepository) GetMonth(ctx context.Context, name string, month time.Time) ([]domain.Attendance, error) {
+func (r AttendanceRepository) GetMonth(ctx context.Context, ownerUserID int64, name string, month time.Time) ([]domain.Attendance, error) {
 	start := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.UTC)
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, employee_id, employee_name, attendance_date, check_in, check_out, status, source, created_at
 		FROM attendance
-		WHERE employee_name = $1
-		  AND attendance_date >= $2
-		  AND attendance_date < $2 + interval '1 month'
+		WHERE owner_user_id=$1 AND employee_name = $2
+		  AND attendance_date >= $3
+		  AND attendance_date < $3 + interval '1 month'
 		ORDER BY attendance_date ASC
-	`, name, start)
+	`, ownerUserID, name, start)
 	if err != nil {
 		return nil, err
 	}

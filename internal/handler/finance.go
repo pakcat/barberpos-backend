@@ -11,6 +11,7 @@ import (
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 	"github.com/xuri/excelize/v2"
 )
@@ -26,6 +27,11 @@ func (h FinanceHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h FinanceHandler) list(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	startDate, err := parseDateQuery(r, "startDate")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid startDate")
@@ -43,9 +49,9 @@ func (h FinanceHandler) list(w http.ResponseWriter, r *http.Request) {
 
 	var items []domain.FinanceEntry
 	if startDate != nil || endDate != nil {
-		items, err = h.Repo.ListFiltered(r.Context(), startDate, endDate)
+		items, err = h.Repo.ListFiltered(r.Context(), user.ID, startDate, endDate)
 	} else {
-		items, err = h.Repo.List(r.Context(), 200)
+		items, err = h.Repo.List(r.Context(), user.ID, 200)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -71,6 +77,11 @@ func (h FinanceHandler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h FinanceHandler) export(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	format := r.URL.Query().Get("format")
 	if format == "" {
 		format = "csv"
@@ -93,9 +104,9 @@ func (h FinanceHandler) export(w http.ResponseWriter, r *http.Request) {
 
 	var items []domain.FinanceEntry
 	if startDate != nil || endDate != nil {
-		items, err = h.Repo.ListFiltered(r.Context(), startDate, endDate)
+		items, err = h.Repo.ListFiltered(r.Context(), user.ID, startDate, endDate)
 	} else {
-		items, err = h.Repo.List(r.Context(), 2000)
+		items, err = h.Repo.List(r.Context(), user.ID, 2000)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -236,6 +247,11 @@ func derefString(v *string) string {
 }
 
 func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	var req struct {
 		Title    string  `json:"title"`
 		Amount   int64   `json:"amount"`
@@ -262,7 +278,7 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 			dt = t
 		}
 	}
-	fe, err := h.Repo.Create(r.Context(), repository.CreateFinanceInput{
+	fe, err := h.Repo.Create(r.Context(), user.ID, repository.CreateFinanceInput{
 		Title:    req.Title,
 		Amount:   req.Amount,
 		Category: req.Category,

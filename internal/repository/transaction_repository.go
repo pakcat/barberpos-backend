@@ -15,15 +15,15 @@ type TransactionRepository struct {
 	DB *db.Postgres
 }
 
-func (r TransactionRepository) GetByCode(ctx context.Context, code string) (*domain.Transaction, error) {
+func (r TransactionRepository) GetByCode(ctx context.Context, ownerUserID int64, code string) (*domain.Transaction, error) {
 	row := r.DB.Pool.QueryRow(ctx, `
 		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
 		       shift_id, operator_name, refunded_at, refunded_by, refund_note, created_at, updated_at, deleted_at
 		FROM transactions
-		WHERE deleted_at IS NULL AND code = $1
+		WHERE deleted_at IS NULL AND code = $1 AND owner_user_id=$2
 		LIMIT 1
-	`, code)
+	`, code, ownerUserID)
 	var t domain.Transaction
 	var status string
 	var customerName, customerPhone, customerEmail, customerAddress pgtype.Text
@@ -137,7 +137,7 @@ type CreateTransactionItem struct {
 	Qty       int
 }
 
-func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionInput, after func(context.Context, pgx.Tx) error) (*domain.Transaction, error) {
+func (r TransactionRepository) Create(ctx context.Context, ownerUserID int64, in CreateTransactionInput, after func(context.Context, pgx.Tx) error) (*domain.Transaction, error) {
 	tx, err := r.DB.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 	defer tx.Rollback(ctx)
 
 	if in.ClientRef != nil && *in.ClientRef != "" {
-		existing, err := r.getByClientRefWithTx(ctx, tx, *in.ClientRef)
+		existing, err := r.getByClientRefWithTx(ctx, tx, ownerUserID, *in.ClientRef)
 		if err == nil {
 			if err := tx.Commit(ctx); err != nil {
 				return nil, err
@@ -166,12 +166,12 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transactions
-		(code, client_ref, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
+		(owner_user_id, code, client_ref, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		 customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
 		 shift_id, operator_name, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, now(), now())
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, now(), now())
 		RETURNING id
-	`, code, in.ClientRef, now.Format("2006-01-02"), now.Format("15:04"), in.Amount, in.PaymentMethod, domain.TransactionPaid, in.Stylist, in.StylistID,
+	`, ownerUserID, code, in.ClientRef, now.Format("2006-01-02"), now.Format("15:04"), in.Amount, in.PaymentMethod, domain.TransactionPaid, in.Stylist, in.StylistID,
 		in.CustomerName, in.CustomerPhone, in.CustomerEmail, in.CustomerAddr, in.CustomerVisits, in.CustomerLastVisit,
 		in.ShiftID, in.OperatorName).Scan(&id)
 	if err != nil {
@@ -181,8 +181,10 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 	for _, item := range in.Items {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO transaction_items (transaction_id, product_id, name, category, price, qty, created_at)
-			VALUES ($1,$2,$3,$4,$5,$6, now())
-		`, id, item.ProductID, item.Name, item.Category, item.Price, item.Qty)
+			VALUES ($1,
+			        (SELECT id FROM products WHERE id=$2 AND owner_user_id=$7 AND deleted_at IS NULL),
+			        $3,$4,$5,$6, now())
+		`, id, item.ProductID, item.Name, item.Category, item.Price, item.Qty, ownerUserID)
 		if err != nil {
 			return nil, err
 		}
@@ -222,15 +224,15 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 	}, nil
 }
 
-func (r TransactionRepository) getByClientRefWithTx(ctx context.Context, tx pgx.Tx, clientRef string) (*domain.Transaction, error) {
+func (r TransactionRepository) getByClientRefWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, clientRef string) (*domain.Transaction, error) {
 	row := tx.QueryRow(ctx, `
 		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
 		       shift_id, operator_name, refunded_at, refunded_by, refund_note, created_at, updated_at, deleted_at
 		FROM transactions
-		WHERE deleted_at IS NULL AND client_ref = $1
+		WHERE deleted_at IS NULL AND client_ref = $1 AND owner_user_id=$2
 		LIMIT 1
-	`, clientRef)
+	`, clientRef, ownerUserID)
 	var t domain.Transaction
 	var status string
 	var customerName, customerPhone, customerEmail, customerAddress pgtype.Text
@@ -333,16 +335,16 @@ func mapItems(items []CreateTransactionItem) []domain.TransactionItem {
 	return out
 }
 
-func (r TransactionRepository) List(ctx context.Context, limit int) ([]domain.Transaction, error) {
+func (r TransactionRepository) List(ctx context.Context, ownerUserID int64, limit int) ([]domain.Transaction, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
 		       shift_id, operator_name, refunded_at, refunded_by, refund_note, created_at, updated_at
 		FROM transactions
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND owner_user_id=$1
 		ORDER BY transacted_date DESC, id DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, ownerUserID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -439,15 +441,16 @@ func (r TransactionRepository) List(ctx context.Context, limit int) ([]domain.Tr
 	return txs, nil
 }
 
-func (r TransactionRepository) ListFiltered(ctx context.Context, startDate, endDate *time.Time) ([]domain.Transaction, error) {
+func (r TransactionRepository) ListFiltered(ctx context.Context, ownerUserID int64, startDate, endDate *time.Time) ([]domain.Transaction, error) {
 	query := `
 		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
 		       shift_id, operator_name, refunded_at, refunded_by, refund_note, created_at, updated_at
 		FROM transactions
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND owner_user_id = $1
 	`
-	args := make([]any, 0, 2)
+	args := make([]any, 0, 3)
+	args = append(args, ownerUserID)
 	if startDate != nil {
 		query += fmt.Sprintf(" AND transacted_date >= $%d", len(args)+1)
 		args = append(args, startDate.Format("2006-01-02"))
@@ -555,7 +558,7 @@ func (r TransactionRepository) ListFiltered(ctx context.Context, startDate, endD
 	return txs, nil
 }
 
-func (r TransactionRepository) MarkPaidByCode(ctx context.Context, code string) error {
+func (r TransactionRepository) MarkPaidByCode(ctx context.Context, ownerUserID int64, code string) error {
 	ct, err := r.DB.Pool.Exec(ctx, `
 		UPDATE transactions
 		SET status='paid',
@@ -564,8 +567,8 @@ func (r TransactionRepository) MarkPaidByCode(ctx context.Context, code string) 
 		    refund_note='',
 		    deleted_at=NULL,
 		    updated_at=now()
-		WHERE code=$1
-	`, code)
+		WHERE code=$1 AND owner_user_id=$2
+	`, code, ownerUserID)
 	if err != nil {
 		return err
 	}
@@ -575,7 +578,7 @@ func (r TransactionRepository) MarkPaidByCode(ctx context.Context, code string) 
 	return nil
 }
 
-func (r TransactionRepository) MarkPaidByCodeWithTx(ctx context.Context, tx pgx.Tx, code string) (int64, error) {
+func (r TransactionRepository) MarkPaidByCodeWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, code string) (int64, error) {
 	var id int64
 	err := tx.QueryRow(ctx, `
 		UPDATE transactions
@@ -585,9 +588,9 @@ func (r TransactionRepository) MarkPaidByCodeWithTx(ctx context.Context, tx pgx.
 		    refund_note='',
 		    deleted_at=NULL,
 		    updated_at=now()
-		WHERE code=$1
+		WHERE code=$1 AND owner_user_id=$2
 		RETURNING id
-	`, code).Scan(&id)
+	`, code, ownerUserID).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return 0, ErrNotFound
@@ -609,7 +612,7 @@ type RefundItem struct {
 	Qty       int
 }
 
-func (r TransactionRepository) RefundByCode(ctx context.Context, in RefundTransactionParams, after func(context.Context, pgx.Tx, domain.Transaction, []RefundItem, int) error) error {
+func (r TransactionRepository) RefundByCode(ctx context.Context, ownerUserID int64, in RefundTransactionParams, after func(context.Context, pgx.Tx, domain.Transaction, []RefundItem, int) error) error {
 	tx, err := r.DB.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -619,9 +622,9 @@ func (r TransactionRepository) RefundByCode(ctx context.Context, in RefundTransa
 	row := tx.QueryRow(ctx, `
 		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status
 		FROM transactions
-		WHERE code=$1
+		WHERE code=$1 AND owner_user_id=$2
 		FOR UPDATE
-	`, in.Code)
+	`, in.Code, ownerUserID)
 	var t domain.Transaction
 	var status string
 	if err := row.Scan(&t.ID, &t.Code, &t.Date, &t.Time, &t.Amount.Amount, &t.PaymentMethod, &status); err != nil {

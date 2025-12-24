@@ -24,7 +24,12 @@ func (h EmployeeHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h EmployeeHandler) list(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Repo.List(r.Context(), 500)
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	items, err := h.Repo.List(r.Context(), user.ID, 500)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -106,8 +111,12 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		}
 		e.PinHash = ptr(string(hash))
 	}
-	saved, err := h.Repo.Upsert(r.Context(), e)
+	saved, err := h.Repo.Save(r.Context(), user.ID, e)
 	if err != nil {
+		if err == repository.ErrNotFound {
+			writeError(w, http.StatusNotFound, "employee not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -125,13 +134,22 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h EmployeeHandler) delete(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := h.Repo.Delete(r.Context(), id); err != nil {
+	if err := h.Repo.Delete(r.Context(), user.ID, id); err != nil {
+		if err == repository.ErrNotFound {
+			writeError(w, http.StatusNotFound, "employee not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -8,11 +8,13 @@ import (
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
 type ActivityLogHandler struct {
-	Repo repository.ActivityLogRepository
+	Repo      repository.ActivityLogRepository
+	Employees repository.EmployeeRepository
 }
 
 func (h ActivityLogHandler) RegisterRoutes(r chi.Router) {
@@ -21,6 +23,16 @@ func (h ActivityLogHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h ActivityLogHandler) create(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	var req struct {
 		Title     string `json:"title"`
 		Message   string `json:"message"`
@@ -55,7 +67,7 @@ func (h ActivityLogHandler) create(w http.ResponseWriter, r *http.Request) {
 		actor = "System"
 	}
 
-	id, err := h.Repo.Create(r.Context(), repository.CreateActivityLogInput{
+	id, err := h.Repo.Create(r.Context(), ownerID, repository.CreateActivityLogInput{
 		Title:     req.Title,
 		Message:   req.Message,
 		Actor:     actor,
@@ -70,13 +82,23 @@ func (h ActivityLogHandler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h ActivityLogHandler) list(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	limit := 100
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
-	items, err := h.Repo.List(r.Context(), limit)
+	items, err := h.Repo.List(r.Context(), ownerID, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

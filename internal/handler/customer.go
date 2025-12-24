@@ -7,11 +7,13 @@ import (
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
 type CustomerHandler struct {
-	Repo repository.CustomerRepository
+	Repo      repository.CustomerRepository
+	Employees repository.EmployeeRepository
 }
 
 func (h CustomerHandler) RegisterRoutes(r chi.Router) {
@@ -21,7 +23,18 @@ func (h CustomerHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h CustomerHandler) list(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Repo.List(r.Context(), 500)
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	items, err := h.Repo.List(r.Context(), ownerID, 500)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -40,6 +53,16 @@ func (h CustomerHandler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h CustomerHandler) upsert(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	var req struct {
 		ID      *int64 `json:"id"`
 		Name    string `json:"name"`
@@ -65,7 +88,7 @@ func (h CustomerHandler) upsert(w http.ResponseWriter, r *http.Request) {
 	if req.ID != nil {
 		c.ID = *req.ID
 	}
-	saved, err := h.Repo.Upsert(r.Context(), c)
+	saved, err := h.Repo.Upsert(r.Context(), ownerID, c)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -80,13 +103,23 @@ func (h CustomerHandler) upsert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h CustomerHandler) delete(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := h.Repo.Delete(r.Context(), id); err != nil {
+	if err := h.Repo.Delete(r.Context(), ownerID, id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

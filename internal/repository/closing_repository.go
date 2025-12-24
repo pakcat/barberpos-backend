@@ -32,7 +32,7 @@ type ClosingHistory struct {
 }
 
 // Summary aggregates today's transactions by payment method.
-func (r ClosingRepository) Summary(ctx context.Context) (ClosingSummary, error) {
+func (r ClosingRepository) Summary(ctx context.Context, ownerUserID int64) (ClosingSummary, error) {
 	var s ClosingSummary
 	err := r.DB.Pool.QueryRow(ctx, `
 		SELECT
@@ -40,8 +40,8 @@ func (r ClosingRepository) Summary(ctx context.Context) (ClosingSummary, error) 
 			COALESCE(SUM(amount) FILTER (WHERE lower(payment_method) <> 'cash' AND lower(payment_method) <> 'card' AND status='paid' AND transacted_date = CURRENT_DATE),0) AS noncash,
 			COALESCE(SUM(amount) FILTER (WHERE lower(payment_method) = 'card' AND status='paid' AND transacted_date = CURRENT_DATE),0) AS card
 		FROM transactions
-		WHERE deleted_at IS NULL
-	`).Scan(&s.TotalCash, &s.TotalNonCash, &s.TotalCard)
+		WHERE deleted_at IS NULL AND owner_user_id=$1
+	`, ownerUserID).Scan(&s.TotalCash, &s.TotalNonCash, &s.TotalCard)
 	return s, err
 }
 
@@ -57,27 +57,27 @@ type CreateClosingInput struct {
 	Fisik        string
 }
 
-func (r ClosingRepository) Create(ctx context.Context, in CreateClosingInput) (int64, error) {
+func (r ClosingRepository) Create(ctx context.Context, ownerUserID int64, in CreateClosingInput) (int64, error) {
 	var id int64
 	err := r.DB.Pool.QueryRow(ctx, `
-		INSERT INTO closing_history (tanggal, shift, karyawan, shift_id, operator_name, total, status, catatan, fisik, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now(), now())
+		INSERT INTO closing_history (owner_user_id, tanggal, shift, karyawan, shift_id, operator_name, total, status, catatan, fisik, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now(), now())
 		RETURNING id
-	`, in.Tanggal.Format("2006-01-02"), in.Shift, in.Karyawan, in.ShiftID, in.OperatorName, in.Total, in.Status, in.Catatan, in.Fisik).Scan(&id)
+	`, ownerUserID, in.Tanggal.Format("2006-01-02"), in.Shift, in.Karyawan, in.ShiftID, in.OperatorName, in.Total, in.Status, in.Catatan, in.Fisik).Scan(&id)
 	return id, err
 }
 
-func (r ClosingRepository) List(ctx context.Context, limit int) ([]ClosingHistory, error) {
+func (r ClosingRepository) List(ctx context.Context, ownerUserID int64, limit int) ([]ClosingHistory, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, tanggal, shift, karyawan, shift_id, operator_name, total, status, catatan, fisik, created_at
 		FROM closing_history
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND owner_user_id=$1
 		ORDER BY tanggal DESC, id DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, ownerUserID, limit)
 	if err != nil {
 		return nil, err
 	}

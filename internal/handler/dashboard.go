@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -20,7 +21,12 @@ func (h DashboardHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h DashboardHandler) summary(w http.ResponseWriter, r *http.Request) {
-	data, err := h.Repo.Summary(r.Context())
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	data, err := h.Repo.Summary(r.Context(), user.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -37,7 +43,12 @@ func (h DashboardHandler) summary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h DashboardHandler) topServices(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Repo.TopServices(r.Context(), 5)
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	items, err := h.Repo.TopServices(r.Context(), user.ID, 5)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -46,7 +57,12 @@ func (h DashboardHandler) topServices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h DashboardHandler) topStaff(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Repo.TopStaff(r.Context(), 5)
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	items, err := h.Repo.TopStaff(r.Context(), user.ID, 5)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -55,6 +71,11 @@ func (h DashboardHandler) topStaff(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h DashboardHandler) sales(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	rangeParam := strings.ToLower(r.URL.Query().Get("range"))
 	days := 30
 	switch rangeParam {
@@ -65,7 +86,7 @@ func (h DashboardHandler) sales(w http.ResponseWriter, r *http.Request) {
 	case "30d", "bulan ini", "bulan", "month":
 		days = 30
 	}
-	points, err := h.Repo.SalesSeries(r.Context(), days)
+	points, err := h.Repo.SalesSeries(r.Context(), user.ID, days)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

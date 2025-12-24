@@ -20,27 +20,27 @@ type CreateActivityLogInput struct {
 	Timestamp time.Time
 }
 
-func (r ActivityLogRepository) Create(ctx context.Context, in CreateActivityLogInput) (int64, error) {
+func (r ActivityLogRepository) Create(ctx context.Context, ownerUserID int64, in CreateActivityLogInput) (int64, error) {
 	var id int64
 	err := r.DB.Pool.QueryRow(ctx, `
-		INSERT INTO activity_logs (title, message, actor, type, logged_at, synced, created_at)
-		VALUES ($1,$2,$3,$4,$5,true, now())
+		INSERT INTO activity_logs (owner_user_id, title, message, actor, type, logged_at, synced, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,true, now())
 		RETURNING id
-	`, in.Title, in.Message, in.Actor, string(in.Type), in.Timestamp).Scan(&id)
+	`, ownerUserID, in.Title, in.Message, in.Actor, string(in.Type), in.Timestamp).Scan(&id)
 	return id, err
 }
 
-func (r ActivityLogRepository) List(ctx context.Context, limit int) ([]domain.ActivityLog, error) {
+func (r ActivityLogRepository) List(ctx context.Context, ownerUserID int64, limit int) ([]domain.ActivityLog, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, title, message, actor, type, logged_at, synced
 		FROM activity_logs
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND owner_user_id=$1
 		ORDER BY logged_at DESC, id DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, ownerUserID, limit)
 	if err != nil {
 		return nil, err
 	}

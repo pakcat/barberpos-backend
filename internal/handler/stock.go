@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -20,7 +21,12 @@ func (h StockHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h StockHandler) list(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Repo.List(r.Context(), 500)
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	items, err := h.Repo.List(r.Context(), user.ID, 500)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -41,6 +47,11 @@ func (h StockHandler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h StockHandler) adjust(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	var req struct {
 		StockID   int64  `json:"stockId"`
 		Change    int    `json:"change"`
@@ -59,7 +70,7 @@ func (h StockHandler) adjust(w http.ResponseWriter, r *http.Request) {
 	if req.Type == "" {
 		req.Type = "adjust"
 	}
-	stock, err := h.Repo.Adjust(r.Context(), repository.AdjustStockInput{
+	stock, err := h.Repo.Adjust(r.Context(), user.ID, repository.AdjustStockInput{
 		StockID:   req.StockID,
 		Change:    req.Change,
 		Type:      req.Type,
@@ -67,6 +78,10 @@ func (h StockHandler) adjust(w http.ResponseWriter, r *http.Request) {
 		ProductID: req.ProductID,
 	})
 	if err != nil {
+		if err == repository.ErrNotFound {
+			writeError(w, http.StatusNotFound, "stock not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -78,6 +93,11 @@ func (h StockHandler) adjust(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h StockHandler) history(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	idStr := chi.URLParam(r, "id")
 	stockID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -90,8 +110,12 @@ func (h StockHandler) history(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
-	items, err := h.Repo.History(r.Context(), stockID, limit)
+	items, err := h.Repo.History(r.Context(), user.ID, stockID, limit)
 	if err != nil {
+		if err == repository.ErrNotFound {
+			writeError(w, http.StatusNotFound, "stock not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

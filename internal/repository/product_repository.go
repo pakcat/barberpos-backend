@@ -13,13 +13,13 @@ type ProductRepository struct {
 	DB *db.Postgres
 }
 
-func (r ProductRepository) List(ctx context.Context) ([]domain.Product, error) {
+func (r ProductRepository) List(ctx context.Context, ownerUserID int64) ([]domain.Product, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, name, category, price, image, track_stock, stock, min_stock
 		FROM products
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND owner_user_id=$1
 		ORDER BY id ASC
-	`)
+	`, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -37,12 +37,12 @@ func (r ProductRepository) List(ctx context.Context) ([]domain.Product, error) {
 	return items, rows.Err()
 }
 
-func (r ProductRepository) GetByID(ctx context.Context, id int64) (*domain.Product, error) {
+func (r ProductRepository) GetByID(ctx context.Context, ownerUserID int64, id int64) (*domain.Product, error) {
 	row := r.DB.Pool.QueryRow(ctx, `
 		SELECT id, name, category, price, image, track_stock, stock, min_stock
 		FROM products
-		WHERE id=$1 AND deleted_at IS NULL
-	`, id)
+		WHERE id=$1 AND owner_user_id=$2 AND deleted_at IS NULL
+	`, id, ownerUserID)
 
 	var p domain.Product
 	if err := row.Scan(&p.ID, &p.Name, &p.Category, &p.Price.Amount, &p.Image, &p.TrackStock, &p.Stock, &p.MinStock); err != nil {
@@ -54,25 +54,39 @@ func (r ProductRepository) GetByID(ctx context.Context, id int64) (*domain.Produ
 	return &p, nil
 }
 
-func (r ProductRepository) Upsert(ctx context.Context, p domain.Product) (*domain.Product, error) {
-	err := r.DB.Pool.QueryRow(ctx, `
-		INSERT INTO products (id, name, category, price, image, track_stock, stock, min_stock, created_at, updated_at)
-		VALUES (COALESCE($1, nextval('products_id_seq')), $2,$3,$4,$5,$6,$7,$8, now(), now())
-		ON CONFLICT (id) DO UPDATE SET
-			name=EXCLUDED.name,
-			category=EXCLUDED.category,
-			price=EXCLUDED.price,
-			image=EXCLUDED.image,
-			track_stock=EXCLUDED.track_stock,
-			stock=EXCLUDED.stock,
-			min_stock=EXCLUDED.min_stock,
-			updated_at=now(),
-			deleted_at=NULL
-		RETURNING id, name, category, price, image, track_stock, stock, min_stock, created_at, updated_at
-	`, nullableID(p.ID), p.Name, p.Category, p.Price.Amount, p.Image, p.TrackStock, p.Stock, p.MinStock).
-		Scan(&p.ID, &p.Name, &p.Category, &p.Price.Amount, &p.Image, &p.TrackStock, &p.Stock, &p.MinStock, &p.CreatedAt, &p.UpdatedAt)
-	if err != nil {
-		return nil, err
+func (r ProductRepository) Save(ctx context.Context, ownerUserID int64, p domain.Product) (*domain.Product, error) {
+	if p.ID == 0 {
+		err := r.DB.Pool.QueryRow(ctx, `
+			INSERT INTO products (owner_user_id, name, category, price, image, track_stock, stock, min_stock, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now(), now())
+			RETURNING id, name, category, price, image, track_stock, stock, min_stock, created_at, updated_at
+		`, ownerUserID, p.Name, p.Category, p.Price.Amount, p.Image, p.TrackStock, p.Stock, p.MinStock).
+			Scan(&p.ID, &p.Name, &p.Category, &p.Price.Amount, &p.Image, &p.TrackStock, &p.Stock, &p.MinStock, &p.CreatedAt, &p.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err := r.DB.Pool.QueryRow(ctx, `
+			UPDATE products
+			SET name=$1,
+				category=$2,
+				price=$3,
+				image=$4,
+				track_stock=$5,
+				stock=$6,
+				min_stock=$7,
+				updated_at=now(),
+				deleted_at=NULL
+			WHERE id=$8 AND owner_user_id=$9
+			RETURNING id, name, category, price, image, track_stock, stock, min_stock, created_at, updated_at
+		`, p.Name, p.Category, p.Price.Amount, p.Image, p.TrackStock, p.Stock, p.MinStock, p.ID, ownerUserID).
+			Scan(&p.ID, &p.Name, &p.Category, &p.Price.Amount, &p.Image, &p.TrackStock, &p.Stock, &p.MinStock, &p.CreatedAt, &p.UpdatedAt)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, ErrNotFound
+			}
+			return nil, err
+		}
 	}
 
 	// Keep stocks table in sync for tracked products (used by /stock endpoints).
@@ -98,7 +112,7 @@ func (r ProductRepository) Upsert(ctx context.Context, p domain.Product) (*domai
 	return &p, nil
 }
 
-func (r ProductRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.DB.Pool.Exec(ctx, `UPDATE products SET deleted_at = now() WHERE id=$1`, id)
+func (r ProductRepository) Delete(ctx context.Context, ownerUserID int64, id int64) error {
+	_, err := r.DB.Pool.Exec(ctx, `UPDATE products SET deleted_at = now() WHERE id=$1 AND owner_user_id=$2`, id, ownerUserID)
 	return err
 }

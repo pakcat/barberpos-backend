@@ -56,25 +56,30 @@ type orderLine struct {
 }
 
 func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	var req orderPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
-	var ownerID int64
+	var membershipOwnerID int64
 	if h.Membership != nil {
-		user := authctx.FromContext(r.Context())
-		if user == nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
 		resolved, err := resolveOwnerID(r.Context(), *user, h.Employees)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		ownerID = resolved
+		membershipOwnerID = resolved
 	}
 
 	items := make([]repository.CreateTransactionItem, 0, len(req.Items))
@@ -94,7 +99,7 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 	if req.ClientRef != "" {
 		clientRef = &req.ClientRef
 	}
-	tx, err := h.Repo.Create(r.Context(), repository.CreateTransactionInput{
+	tx, err := h.Repo.Create(r.Context(), ownerID, repository.CreateTransactionInput{
 		PaymentMethod: req.PaymentMethod,
 		Stylist:       req.Stylist,
 		StylistID:     req.StylistID,
@@ -109,12 +114,12 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 				continue
 			}
 			// Best-effort: only affects products that track stock (stocks row exists).
-			_ = h.Stocks.AdjustByProductIDWithTx(ctx, tx, *it.ProductID, -it.Qty, "sale", "sale")
+			_ = h.Stocks.AdjustByProductIDWithTx(ctx, tx, ownerID, *it.ProductID, -it.Qty, "sale", "sale")
 		}
 		if h.Membership == nil {
 			return nil
 		}
-		_, err := h.Membership.ConsumeWithTx(ctx, tx, ownerID, unitsToConsume)
+		_, err := h.Membership.ConsumeWithTx(ctx, tx, membershipOwnerID, unitsToConsume)
 		return err
 	})
 	if err != nil {
@@ -134,6 +139,16 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h TransactionHandler) listTransactions(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	startDate, err := parseDateQuery(r, "startDate")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid startDate")
@@ -151,9 +166,9 @@ func (h TransactionHandler) listTransactions(w http.ResponseWriter, r *http.Requ
 
 	var txs []domain.Transaction
 	if startDate != nil || endDate != nil {
-		txs, err = h.Repo.ListFiltered(r.Context(), startDate, endDate)
+		txs, err = h.Repo.ListFiltered(r.Context(), ownerID, startDate, endDate)
 	} else {
-		txs, err = h.Repo.List(r.Context(), 200)
+		txs, err = h.Repo.List(r.Context(), ownerID, 200)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -232,34 +247,23 @@ func countUnits(items []orderLine) int {
 	return sum
 }
 
-func resolveOwnerID(ctx context.Context, user authctx.CurrentUser, employees repository.EmployeeRepository) (int64, error) {
-	switch user.Role {
-	case domain.RoleManager, domain.RoleAdmin:
-		return user.ID, nil
-	case domain.RoleStaff:
-		if user.Email == "" {
-			return 0, errors.New("staff email is required")
-		}
-		emp, err := employees.GetByEmail(ctx, user.Email)
-		if err != nil {
-			return 0, errors.New("employee not found")
-		}
-		if emp.ManagerID == nil {
-			return 0, errors.New("employee has no manager")
-		}
-		return *emp.ManagerID, nil
-	default:
-		return 0, errors.New("invalid role")
-	}
-}
-
 func (h TransactionHandler) getByCode(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	code := chi.URLParam(r, "code")
 	if code == "" {
 		writeError(w, http.StatusBadRequest, "code is required")
 		return
 	}
-	t, err := h.Repo.GetByCode(r.Context(), code)
+	t, err := h.Repo.GetByCode(r.Context(), ownerID, code)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "transaction not found")
@@ -307,6 +311,7 @@ func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	ownerID := user.ID
 	code := chi.URLParam(r, "code")
 	if code == "" {
 		writeError(w, http.StatusBadRequest, "code is required")
@@ -325,18 +330,19 @@ func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
 		deleteFlag = *req.Delete
 	}
 
-	var ownerID int64
+	var membershipOwnerID int64
 	if h.Membership != nil {
 		resolved, err := resolveOwnerID(r.Context(), *user, h.Employees)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		ownerID = resolved
+		membershipOwnerID = resolved
 	}
 
 	err := h.Repo.RefundByCode(
 		r.Context(),
+		ownerID,
 		repository.RefundTransactionParams{
 			Code:       code,
 			Note:       req.Note,
@@ -348,9 +354,9 @@ func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
 				if it.ProductID == nil || it.Qty <= 0 {
 					continue
 				}
-				_ = h.Stocks.AdjustByProductIDWithTx(ctx, tx, *it.ProductID, it.Qty, "refund", "refund "+code)
+				_ = h.Stocks.AdjustByProductIDWithTx(ctx, tx, ownerID, *it.ProductID, it.Qty, "refund", "refund "+code)
 			}
-			_, _ = h.Finance.CreateWithTx(ctx, tx, repository.CreateFinanceInput{
+			_, _ = h.Finance.CreateWithTx(ctx, tx, user.ID, repository.CreateFinanceInput{
 				Title:    "Refund " + code,
 				Amount:   t.Amount.Amount,
 				Category: "Refund",
@@ -363,7 +369,7 @@ func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
 			if h.Membership == nil {
 				return nil
 			}
-			_, err := h.Membership.RefundWithTx(ctx, tx, ownerID, units)
+			_, err := h.Membership.RefundWithTx(ctx, tx, membershipOwnerID, units)
 			return err
 		},
 	)
@@ -396,7 +402,7 @@ func (h TransactionHandler) markPaid(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
-	transactionID, err := h.Repo.MarkPaidByCodeWithTx(r.Context(), tx, code)
+	transactionID, err := h.Repo.MarkPaidByCodeWithTx(r.Context(), tx, user.ID, code)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "transaction not found")
@@ -407,7 +413,7 @@ func (h TransactionHandler) markPaid(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Best-effort: remove refund finance entry when undoing refund.
-	_ = h.Finance.DeleteRefundByTransactionIDWithTx(r.Context(), tx, transactionID)
+	_ = h.Finance.DeleteRefundByTransactionIDWithTx(r.Context(), tx, user.ID, transactionID)
 
 	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

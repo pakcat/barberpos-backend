@@ -36,14 +36,14 @@ func defaultSettings() domain.Settings {
 	}
 }
 
-func (r SettingsRepository) Get(ctx context.Context) (*domain.Settings, error) {
+func (r SettingsRepository) Get(ctx context.Context, ownerUserID int64) (*domain.Settings, error) {
 	row := r.DB.Pool.QueryRow(ctx, `
 		SELECT business_name, business_address, business_phone, receipt_footer, default_payment_method,
 		       printer_name, printer_type, printer_host, printer_port, printer_mac,
 		       paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at
 		FROM settings
-		WHERE id=1
-	`)
+		WHERE owner_user_id=$1
+	`, ownerUserID)
 	var s domain.Settings
 	if err := row.Scan(
 		&s.BusinessName, &s.BusinessAddress, &s.BusinessPhone, &s.ReceiptFooter, &s.DefaultPaymentMethod,
@@ -52,20 +52,20 @@ func (r SettingsRepository) Get(ctx context.Context) (*domain.Settings, error) {
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			def := defaultSettings()
-			return r.Save(ctx, def)
+			return r.Save(ctx, ownerUserID, def)
 		}
 		return nil, err
 	}
 	return &s, nil
 }
 
-func (r SettingsRepository) Save(ctx context.Context, s domain.Settings) (*domain.Settings, error) {
+func (r SettingsRepository) Save(ctx context.Context, ownerUserID int64, s domain.Settings) (*domain.Settings, error) {
 	err := r.DB.Pool.QueryRow(ctx, `
-		INSERT INTO settings (id, business_name, business_address, business_phone, receipt_footer, default_payment_method,
+		INSERT INTO settings (owner_user_id, business_name, business_address, business_phone, receipt_footer, default_payment_method,
 		                      printer_name, printer_type, printer_host, printer_port, printer_mac,
 		                      paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at)
-		VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, now())
-		ON CONFLICT (id) DO UPDATE SET
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, now())
+		ON CONFLICT (owner_user_id) DO UPDATE SET
 			business_name=EXCLUDED.business_name,
 			business_address=EXCLUDED.business_address,
 			business_phone=EXCLUDED.business_phone,
@@ -88,7 +88,7 @@ func (r SettingsRepository) Save(ctx context.Context, s domain.Settings) (*domai
 		RETURNING business_name, business_address, business_phone, receipt_footer, default_payment_method,
 		          printer_name, printer_type, printer_host, printer_port, printer_mac,
 		          paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at
-	`, s.BusinessName, s.BusinessAddress, s.BusinessPhone, s.ReceiptFooter, s.DefaultPaymentMethod,
+	`, ownerUserID, s.BusinessName, s.BusinessAddress, s.BusinessPhone, s.ReceiptFooter, s.DefaultPaymentMethod,
 		s.PrinterName, s.PrinterType, s.PrinterHost, s.PrinterPort, s.PrinterMac,
 		s.PaperSize, s.AutoPrint, s.Notifications, s.TrackStock, s.RoundingPrice, s.AutoBackup, s.CashierPin, s.CurrencyCode).Scan(
 		&s.BusinessName, &s.BusinessAddress, &s.BusinessPhone, &s.ReceiptFooter, &s.DefaultPaymentMethod,

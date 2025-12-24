@@ -31,7 +31,7 @@ type SalesPoint struct {
 	Amount int64
 }
 
-func (r DashboardRepository) Summary(ctx context.Context) (DashboardSummary, error) {
+func (r DashboardRepository) Summary(ctx context.Context, ownerUserID int64) (DashboardSummary, error) {
 	var s DashboardSummary
 	err := r.DB.Pool.QueryRow(ctx, `
 		SELECT
@@ -42,28 +42,31 @@ func (r DashboardRepository) Summary(ctx context.Context) (DashboardSummary, err
 			COALESCE((
 				SELECT COUNT(DISTINCT NULLIF(customer_name, ''))
 				FROM transactions
-				WHERE deleted_at IS NULL AND status = 'paid' AND transacted_date = CURRENT_DATE
+				WHERE deleted_at IS NULL AND status = 'paid' AND transacted_date = CURRENT_DATE AND owner_user_id=$1
 			),0) AS today_customers,
 			COALESCE((
 				SELECT SUM(ti.qty)
 				FROM transaction_items ti
 				JOIN transactions t ON t.id = ti.transaction_id
-				WHERE t.deleted_at IS NULL AND t.status = 'paid' AND t.transacted_date = CURRENT_DATE
+				WHERE t.deleted_at IS NULL AND t.status = 'paid' AND t.transacted_date = CURRENT_DATE AND t.owner_user_id=$1
 			),0) AS services_sold
 		FROM transactions
-		WHERE deleted_at IS NULL
-	`).Scan(&s.TotalRevenue, &s.TotalTransactions, &s.TodayRevenue, &s.TodayTransactions, &s.TodayCustomers, &s.ServicesSold)
+		WHERE deleted_at IS NULL AND owner_user_id=$1
+	`, ownerUserID).Scan(&s.TotalRevenue, &s.TotalTransactions, &s.TodayRevenue, &s.TodayTransactions, &s.TodayCustomers, &s.ServicesSold)
 	return s, err
 }
 
-func (r DashboardRepository) TopServices(ctx context.Context, limit int) ([]DashboardItem, error) {
+func (r DashboardRepository) TopServices(ctx context.Context, ownerUserID int64, limit int) ([]DashboardItem, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT name, COALESCE(SUM(price*qty),0) AS amount, SUM(qty) AS qty
 		FROM transaction_items
+		WHERE transaction_id IN (
+			SELECT id FROM transactions WHERE deleted_at IS NULL AND owner_user_id=$1
+		)
 		GROUP BY name
 		ORDER BY amount DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, ownerUserID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -79,15 +82,15 @@ func (r DashboardRepository) TopServices(ctx context.Context, limit int) ([]Dash
 	return items, rows.Err()
 }
 
-func (r DashboardRepository) TopStaff(ctx context.Context, limit int) ([]DashboardItem, error) {
+func (r DashboardRepository) TopStaff(ctx context.Context, ownerUserID int64, limit int) ([]DashboardItem, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT stylist, COALESCE(SUM(amount),0) AS amount, COUNT(*) AS cnt
 		FROM transactions
-		WHERE stylist <> ''
+		WHERE stylist <> '' AND deleted_at IS NULL AND owner_user_id=$1
 		GROUP BY stylist
 		ORDER BY amount DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, ownerUserID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -103,16 +106,17 @@ func (r DashboardRepository) TopStaff(ctx context.Context, limit int) ([]Dashboa
 	return items, rows.Err()
 }
 
-func (r DashboardRepository) SalesSeries(ctx context.Context, days int) ([]SalesPoint, error) {
+func (r DashboardRepository) SalesSeries(ctx context.Context, ownerUserID int64, days int) ([]SalesPoint, error) {
 	start := time.Now().AddDate(0, 0, -days+1).Format("2006-01-02")
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT transacted_date, COALESCE(SUM(amount),0) AS amount
 		FROM transactions
 		WHERE deleted_at IS NULL
+		  AND owner_user_id=$2
 		  AND transacted_date >= $1::date
 		GROUP BY transacted_date
 		ORDER BY transacted_date ASC
-	`, start)
+	`, start, ownerUserID)
 	if err != nil {
 		return nil, err
 	}

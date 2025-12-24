@@ -90,13 +90,18 @@ func (r StockRepository) SyncFromProducts(ctx context.Context) error {
 	return tx.Commit(ctx)
 }
 
-func (r StockRepository) AdjustByProductIDWithTx(ctx context.Context, tx pgx.Tx, productID int64, delta int, typ string, note string) error {
+func (r StockRepository) AdjustByProductIDWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, productID int64, delta int, typ string, note string) error {
 	row := tx.QueryRow(ctx, `
 		SELECT id, stock
 		FROM stocks
-		WHERE deleted_at IS NULL AND product_id=$1
+		WHERE deleted_at IS NULL
+		  AND product_id=$1
+		  AND EXISTS (
+			  SELECT 1 FROM products p
+			  WHERE p.id = stocks.product_id AND p.owner_user_id=$2 AND p.deleted_at IS NULL
+		  )
 		FOR UPDATE
-	`, productID)
+	`, productID, ownerUserID)
 	var stockID int64
 	var current int
 	if err := row.Scan(&stockID, &current); err != nil {
@@ -127,14 +132,17 @@ func (r StockRepository) AdjustByProductIDWithTx(ctx context.Context, tx pgx.Tx,
 	return nil
 }
 
-func (r StockRepository) List(ctx context.Context, limit int) ([]domain.Stock, error) {
+func (r StockRepository) List(ctx context.Context, ownerUserID int64, limit int) ([]domain.Stock, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
-		SELECT id, product_id, name, category, image, stock, transactions, created_at, updated_at
+		SELECT stocks.id, stocks.product_id, stocks.name, stocks.category, stocks.image, stocks.stock, stocks.transactions, stocks.created_at, stocks.updated_at
 		FROM stocks
-		WHERE deleted_at IS NULL
-		ORDER BY name ASC
-		LIMIT $1
-	`, limit)
+		JOIN products p ON p.id = stocks.product_id
+		WHERE stocks.deleted_at IS NULL
+		  AND p.deleted_at IS NULL
+		  AND p.owner_user_id=$1
+		ORDER BY stocks.name ASC
+		LIMIT $2
+	`, ownerUserID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +166,7 @@ type AdjustStockInput struct {
 	ProductID *int64
 }
 
-func (r StockRepository) Adjust(ctx context.Context, in AdjustStockInput) (*domain.Stock, error) {
+func (r StockRepository) Adjust(ctx context.Context, ownerUserID int64, in AdjustStockInput) (*domain.Stock, error) {
 	tx, err := r.DB.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -169,8 +177,13 @@ func (r StockRepository) Adjust(ctx context.Context, in AdjustStockInput) (*doma
 	err = tx.QueryRow(ctx, `
 		SELECT id, product_id, name, category, image, stock, transactions, created_at, updated_at
 		FROM stocks
-		WHERE id=$1 FOR UPDATE
-	`, in.StockID).Scan(&current.ID, &current.ProductID, &current.Name, &current.Category, &current.Image, &current.Stock, &current.Transactions, &current.CreatedAt, &current.UpdatedAt)
+		WHERE id=$1
+		  AND EXISTS (
+			  SELECT 1 FROM products p
+			  WHERE p.id = stocks.product_id AND p.owner_user_id=$2 AND p.deleted_at IS NULL
+		  )
+		FOR UPDATE
+	`, in.StockID, ownerUserID).Scan(&current.ID, &current.ProductID, &current.Name, &current.Category, &current.Image, &current.Stock, &current.Transactions, &current.CreatedAt, &current.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -223,7 +236,23 @@ func (r StockRepository) Adjust(ctx context.Context, in AdjustStockInput) (*doma
 	return &current, nil
 }
 
-func (r StockRepository) History(ctx context.Context, stockID int64, limit int) ([]map[string]any, error) {
+func (r StockRepository) History(ctx context.Context, ownerUserID int64, stockID int64, limit int) ([]map[string]any, error) {
+	// Ensure stock belongs to caller.
+	var exists bool
+	if err := r.DB.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM stocks s
+			JOIN products p ON p.id = s.product_id
+			WHERE s.id=$1 AND s.deleted_at IS NULL AND p.deleted_at IS NULL AND p.owner_user_id=$2
+		)
+	`, stockID, ownerUserID).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrNotFound
+	}
+
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, change, remaining, note, type, created_at
 		FROM stock_history

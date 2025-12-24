@@ -87,10 +87,10 @@ func main() {
 	// handlers
 	healthHandler := handler.HealthHandler{DB: pg}
 	authHandler := handler.AuthHandler{Service: &authSvc}
-	productHandler := handler.ProductHandler{Repo: productRepo, Currency: cfg.DefaultCurrency}
+	productHandler := handler.ProductHandler{Repo: productRepo, Employees: employeeRepo, Currency: cfg.DefaultCurrency}
 	productAdminHandler := handler.ProductAdminHandler{Repo: productRepo}
-	categoryHandler := handler.CategoryHandler{Repo: categoryRepo}
-	customerHandler := handler.CustomerHandler{Repo: customerRepo}
+	categoryHandler := handler.CategoryHandler{Repo: categoryRepo, Employees: employeeRepo}
+	customerHandler := handler.CustomerHandler{Repo: customerRepo, Employees: employeeRepo}
 	regionHandler := handler.RegionHandler{Repo: regionRepo}
 	settingsHandler := handler.SettingsHandler{Repo: settingsRepo}
 	financeHandler := handler.FinanceHandler{Repo: financeRepo}
@@ -107,10 +107,10 @@ func main() {
 		Stocks:     stockRepo,
 		Finance:    financeRepo,
 	}
-	attendanceHandler := handler.AttendanceHandler{Repo: attendanceRepo}
+	attendanceHandler := handler.AttendanceHandler{Repo: attendanceRepo, Employees: employeeRepo}
 	dashboardHandler := handler.DashboardHandler{Repo: dashboardRepo}
-	closingHandler := handler.ClosingHandler{Repo: closingRepo}
-	activityLogHandler := handler.ActivityLogHandler{Repo: activityLogRepo}
+	closingHandler := handler.ClosingHandler{Repo: closingRepo, Employees: employeeRepo}
+	activityLogHandler := handler.ActivityLogHandler{Repo: activityLogRepo, Employees: employeeRepo}
 	paymentHandler := handler.PaymentHandler{}
 	homeHandler := handler.HomeHandler{}
 	docsHandler := handler.DocsHandler{OpenAPIPath: "openapi.yaml"}
@@ -120,16 +120,9 @@ func main() {
 	if err := regionRepo.SeedDefaults(ctx); err != nil {
 		logger.Warn("bootstrap regions failed", "err", err)
 	}
-	if err := categoryRepo.SeedDefaults(ctx); err != nil {
-		logger.Warn("bootstrap categories failed", "err", err)
-	}
-	if err := productRepo.SeedDefaults(ctx); err != nil {
-		logger.Warn("bootstrap products failed", "err", err)
-	}
 	if err := stockRepo.SyncFromProducts(ctx); err != nil {
 		logger.Warn("bootstrap stocks sync failed", "err", err)
 	}
-	_, _ = settingsRepo.Get(ctx)
 
 	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, regionHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, activityLogHandler, paymentHandler, fcmHandler, notificationHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
 

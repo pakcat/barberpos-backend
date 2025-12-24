@@ -28,14 +28,14 @@ type CreateFinanceInput struct {
 	Service  *string
 }
 
-func (r FinanceRepository) Create(ctx context.Context, in CreateFinanceInput) (*domain.FinanceEntry, error) {
+func (r FinanceRepository) Create(ctx context.Context, ownerUserID int64, in CreateFinanceInput) (*domain.FinanceEntry, error) {
 	var fe domain.FinanceEntry
 	var transactionID pgtype.Int8
 	err := r.DB.Pool.QueryRow(ctx, `
-		INSERT INTO finance_entries (title, amount, category, entry_date, type, note, transaction_id, transaction_code, staff, service, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
+		INSERT INTO finance_entries (owner_user_id, title, amount, category, entry_date, type, note, transaction_id, transaction_code, staff, service, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
 		RETURNING id, title, amount, category, entry_date, type, note, transaction_id, transaction_code, staff, service, created_at
-	`, in.Title, in.Amount, in.Category, in.Date.Format("2006-01-02"), string(in.Type), in.Note, in.TransactionID, in.TransactionCode, in.Staff, in.Service).Scan(
+	`, ownerUserID, in.Title, in.Amount, in.Category, in.Date.Format("2006-01-02"), string(in.Type), in.Note, in.TransactionID, in.TransactionCode, in.Staff, in.Service).Scan(
 		&fe.ID, &fe.Title, &fe.Amount.Amount, &fe.Category, &fe.Date, (*string)(&fe.Type), &fe.Note, &transactionID, &fe.TransactionCode, &fe.Staff, &fe.Service, &fe.CreatedAt,
 	)
 	if transactionID.Valid {
@@ -45,14 +45,14 @@ func (r FinanceRepository) Create(ctx context.Context, in CreateFinanceInput) (*
 	return &fe, err
 }
 
-func (r FinanceRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, in CreateFinanceInput) (*domain.FinanceEntry, error) {
+func (r FinanceRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, in CreateFinanceInput) (*domain.FinanceEntry, error) {
 	var fe domain.FinanceEntry
 	var transactionID pgtype.Int8
 	err := tx.QueryRow(ctx, `
-		INSERT INTO finance_entries (title, amount, category, entry_date, type, note, transaction_id, transaction_code, staff, service, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
+		INSERT INTO finance_entries (owner_user_id, title, amount, category, entry_date, type, note, transaction_id, transaction_code, staff, service, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
 		RETURNING id, title, amount, category, entry_date, type, note, transaction_id, transaction_code, staff, service, created_at
-	`, in.Title, in.Amount, in.Category, in.Date.Format("2006-01-02"), string(in.Type), in.Note, in.TransactionID, in.TransactionCode, in.Staff, in.Service).Scan(
+	`, ownerUserID, in.Title, in.Amount, in.Category, in.Date.Format("2006-01-02"), string(in.Type), in.Note, in.TransactionID, in.TransactionCode, in.Staff, in.Service).Scan(
 		&fe.ID, &fe.Title, &fe.Amount.Amount, &fe.Category, &fe.Date, (*string)(&fe.Type), &fe.Note, &transactionID, &fe.TransactionCode, &fe.Staff, &fe.Service, &fe.CreatedAt,
 	)
 	if transactionID.Valid {
@@ -62,14 +62,14 @@ func (r FinanceRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, in Creat
 	return &fe, err
 }
 
-func (r FinanceRepository) List(ctx context.Context, limit int) ([]domain.FinanceEntry, error) {
+func (r FinanceRepository) List(ctx context.Context, ownerUserID int64, limit int) ([]domain.FinanceEntry, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, title, amount, category, entry_date, type, note, transaction_id, transaction_code, staff, service, created_at
 		FROM finance_entries
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND owner_user_id=$1
 		ORDER BY entry_date DESC, id DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, ownerUserID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -92,13 +92,14 @@ func (r FinanceRepository) List(ctx context.Context, limit int) ([]domain.Financ
 	return items, rows.Err()
 }
 
-func (r FinanceRepository) ListFiltered(ctx context.Context, startDate, endDate *time.Time) ([]domain.FinanceEntry, error) {
+func (r FinanceRepository) ListFiltered(ctx context.Context, ownerUserID int64, startDate, endDate *time.Time) ([]domain.FinanceEntry, error) {
 	query := `
 		SELECT id, title, amount, category, entry_date, type, note, transaction_id, transaction_code, staff, service, created_at
 		FROM finance_entries
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND owner_user_id = $1
 	`
-	args := make([]any, 0, 2)
+	args := make([]any, 0, 3)
+	args = append(args, ownerUserID)
 	if startDate != nil {
 		query += fmt.Sprintf(" AND entry_date >= $%d", len(args)+1)
 		args = append(args, startDate.Format("2006-01-02"))
@@ -132,26 +133,28 @@ func (r FinanceRepository) ListFiltered(ctx context.Context, startDate, endDate 
 	return items, rows.Err()
 }
 
-func (r FinanceRepository) DeleteRefundByTransactionCodeWithTx(ctx context.Context, tx pgx.Tx, code string) error {
+func (r FinanceRepository) DeleteRefundByTransactionCodeWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, code string) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE finance_entries
 		SET deleted_at=now()
 		WHERE deleted_at IS NULL
+		  AND owner_user_id=$2
 		  AND transaction_code=$1
 		  AND category='Refund'
 		  AND type='expense'
-	`, code)
+	`, code, ownerUserID)
 	return err
 }
 
-func (r FinanceRepository) DeleteRefundByTransactionIDWithTx(ctx context.Context, tx pgx.Tx, transactionID int64) error {
+func (r FinanceRepository) DeleteRefundByTransactionIDWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, transactionID int64) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE finance_entries
 		SET deleted_at=now()
 		WHERE deleted_at IS NULL
+		  AND owner_user_id=$2
 		  AND transaction_id=$1
 		  AND category='Refund'
 		  AND type='expense'
-	`, transactionID)
+	`, transactionID, ownerUserID)
 	return err
 }
