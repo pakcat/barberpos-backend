@@ -71,6 +71,9 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
+	if req.ClientRef == "" {
+		req.ClientRef = r.Header.Get("X-Idempotency-Key")
+	}
 
 	var membershipOwnerID int64
 	if h.Membership != nil {
@@ -357,12 +360,12 @@ func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
 				_ = h.Stocks.AdjustByProductIDWithTx(ctx, tx, ownerID, *it.ProductID, it.Qty, "refund", "refund "+code)
 			}
 			_, _ = h.Finance.CreateWithTx(ctx, tx, user.ID, repository.CreateFinanceInput{
-				Title:    "Refund " + code,
-				Amount:   t.Amount.Amount,
-				Category: "Refund",
-				Date:     time.Now(),
-				Type:     domain.FinanceExpense,
-				Note:     req.Note,
+				Title:           "Refund " + code,
+				Amount:          t.Amount.Amount,
+				Category:        "Refund",
+				Date:            time.Now(),
+				Type:            domain.FinanceExpense,
+				Note:            req.Note,
 				TransactionID:   &t.ID,
 				TransactionCode: &code,
 			})

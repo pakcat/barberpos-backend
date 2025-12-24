@@ -91,17 +91,26 @@ func (r ProductRepository) Save(ctx context.Context, ownerUserID int64, p domain
 
 	// Keep stocks table in sync for tracked products (used by /stock endpoints).
 	if p.TrackStock {
-		_, _ = r.DB.Pool.Exec(ctx, `
-			INSERT INTO stocks (product_id, name, category, image, stock, transactions, created_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5, 0, now(), now())
-			ON CONFLICT (product_id) DO UPDATE SET
-				name=EXCLUDED.name,
-				category=EXCLUDED.category,
-				image=EXCLUDED.image,
-				stock=EXCLUDED.stock,
-				updated_at=now(),
-				deleted_at=NULL
+		// Update-first then insert if missing; avoids relying on a specific unique index shape.
+		ct, err := r.DB.Pool.Exec(ctx, `
+			UPDATE stocks
+			SET name=$2, category=$3, image=$4, stock=$5, updated_at=now(), deleted_at=NULL
+			WHERE product_id=$1
 		`, p.ID, p.Name, p.Category, p.Image, p.Stock)
+		if err == nil && ct.RowsAffected() == 0 {
+			_, err = r.DB.Pool.Exec(ctx, `
+				INSERT INTO stocks (product_id, name, category, image, stock, transactions, created_at, updated_at)
+				VALUES ($1,$2,$3,$4,$5, 0, now(), now())
+			`, p.ID, p.Name, p.Category, p.Image, p.Stock)
+			if db.IsUniqueViolation(err) {
+				// Race: someone inserted first, re-run update.
+				_, _ = r.DB.Pool.Exec(ctx, `
+					UPDATE stocks
+					SET name=$2, category=$3, image=$4, stock=$5, updated_at=now(), deleted_at=NULL
+					WHERE product_id=$1
+				`, p.ID, p.Name, p.Category, p.Image, p.Stock)
+			}
+		}
 	} else {
 		_, _ = r.DB.Pool.Exec(ctx, `
 			UPDATE stocks

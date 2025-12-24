@@ -175,6 +175,17 @@ func (r TransactionRepository) Create(ctx context.Context, ownerUserID int64, in
 		in.CustomerName, in.CustomerPhone, in.CustomerEmail, in.CustomerAddr, in.CustomerVisits, in.CustomerLastVisit,
 		in.ShiftID, in.OperatorName).Scan(&id)
 	if err != nil {
+		// Race-safe idempotency: if another request with the same client_ref inserted first, load and return it.
+		if in.ClientRef != nil && *in.ClientRef != "" && db.IsUniqueViolation(err) {
+			existing, getErr := r.getByClientRefWithTx(ctx, tx, ownerUserID, *in.ClientRef)
+			if getErr != nil {
+				return nil, err
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return nil, err
+			}
+			return existing, nil
+		}
 		return nil, err
 	}
 
