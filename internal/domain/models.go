@@ -169,6 +169,7 @@ type Employee struct {
 	ManagerID  *int64
 	Name       string
 	Role       string
+	AllowedModules []string
 	Phone      string
 	Email      string
 	PinHash    *string

@@ -41,6 +41,7 @@ func (h EmployeeHandler) list(w http.ResponseWriter, r *http.Request) {
 			"managerUserId": e.ManagerID,
 			"name":          e.Name,
 			"role":          e.Role,
+			"modules":       e.AllowedModules,
 			"phone":         e.Phone,
 			"email":         e.Email,
 			"joinDate":      e.JoinDate.Format("2006-01-02"),
@@ -56,6 +57,7 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		ID         *int64   `json:"id"`
 		Name       string   `json:"name"`
 		Role       string   `json:"role"`
+		Modules    []string `json:"modules"`
 		Phone      string   `json:"phone"`
 		Email      string   `json:"email"`
 		Pin        string   `json:"pin"`
@@ -71,18 +73,32 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	if req.Role == "" {
-		writeError(w, http.StatusBadRequest, "role is required")
-		return
+	// Single employee role model: all employees are staff; manager/admin roles are reserved for account owners.
+	req.Role = "Staff"
+	allowedModuleKeys := map[string]struct{}{
+		"cashier":      {},
+		"transactions": {},
+		"customers":    {},
+		"closing":      {},
 	}
-	allowedRoles := map[string]struct{}{
-		"Admin":  {},
-		"Kasir":  {},
-		"Barber": {},
+	normalized := make([]string, 0, len(req.Modules))
+	seen := map[string]struct{}{}
+	for _, m := range req.Modules {
+		if m == "" {
+			continue
+		}
+		if _, ok := allowedModuleKeys[m]; !ok {
+			continue
+		}
+		if _, dup := seen[m]; dup {
+			continue
+		}
+		seen[m] = struct{}{}
+		normalized = append(normalized, m)
 	}
-	if _, ok := allowedRoles[req.Role]; !ok {
-		writeError(w, http.StatusBadRequest, "invalid role")
-		return
+	// Defaults if manager doesn't choose anything.
+	if len(normalized) == 0 {
+		normalized = []string{"cashier", "transactions", "customers", "closing"}
 	}
 	if req.ID == nil && req.Pin == "" {
 		writeError(w, http.StatusBadRequest, "pin is required")
@@ -107,6 +123,7 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		ManagerID:  &user.ID,
 		Name:       req.Name,
 		Role:       req.Role,
+		AllowedModules: normalized,
 		Phone:      req.Phone,
 		Email:      req.Email,
 		JoinDate:   joinDate,
@@ -138,6 +155,7 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		"managerUserId": saved.ManagerID,
 		"name":          saved.Name,
 		"role":          saved.Role,
+		"modules":       saved.AllowedModules,
 		"phone":         saved.Phone,
 		"email":         saved.Email,
 		"joinDate":      saved.JoinDate.Format("2006-01-02"),

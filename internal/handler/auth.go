@@ -213,19 +213,23 @@ func (h AuthHandler) changePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeAuthResponse(w http.ResponseWriter, res *service.AuthResult) {
+	userPayload := map[string]any{
+		"id":       strconv.FormatInt(res.User.ID, 10),
+		"name":     res.User.Name,
+		"email":    res.User.Email,
+		"role":     string(res.User.Role),
+		"phone":    res.User.Phone,
+		"address":  res.User.Address,
+		"region":   res.User.Region,
+		"isGoogle": res.User.IsGoogle,
+	}
+	if len(res.Permissions) > 0 {
+		userPayload["permissions"] = res.Permissions
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":        res.AccessToken,
 		"refreshToken": res.RefreshToken,
 		"expiresAt":    res.ExpiresAt.UTC().Format(time.RFC3339),
-		"user": map[string]any{
-			"id":       strconv.FormatInt(res.User.ID, 10),
-			"name":     res.User.Name,
-			"email":    res.User.Email,
-			"role":     string(res.User.Role),
-			"phone":    res.User.Phone,
-			"address":  res.User.Address,
-			"region":   res.User.Region,
-			"isGoogle": res.User.IsGoogle,
-		},
+		"user":         userPayload,
 	})
 }

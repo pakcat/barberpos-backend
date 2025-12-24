@@ -38,6 +38,7 @@ func (h AttendanceHandler) checkIn(w http.ResponseWriter, r *http.Request) {
 		EmployeeID   *int64 `json:"employeeId"`
 		EmployeeName string `json:"employeeName"`
 		Source       string `json:"source"`
+		Date         string `json:"date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid payload")
@@ -47,7 +48,13 @@ func (h AttendanceHandler) checkIn(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "employeeName is required")
 		return
 	}
-	if err := h.Repo.CheckIn(r.Context(), ownerID, req.EmployeeName, req.EmployeeID, req.Source); err != nil {
+	date := time.Now()
+	if req.Date != "" {
+		if t, err := time.Parse("2006-01-02", req.Date); err == nil {
+			date = t
+		}
+	}
+	if err := h.Repo.CheckIn(r.Context(), ownerID, req.EmployeeName, req.EmployeeID, date, req.Source); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -69,6 +76,7 @@ func (h AttendanceHandler) checkOut(w http.ResponseWriter, r *http.Request) {
 		EmployeeID   *int64 `json:"employeeId"`
 		EmployeeName string `json:"employeeName"`
 		Source       string `json:"source"`
+		Date         string `json:"date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid payload")
@@ -78,7 +86,13 @@ func (h AttendanceHandler) checkOut(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "employeeName is required")
 		return
 	}
-	if err := h.Repo.CheckOut(r.Context(), ownerID, req.EmployeeName, req.EmployeeID, req.Source); err != nil {
+	date := time.Now()
+	if req.Date != "" {
+		if t, err := time.Parse("2006-01-02", req.Date); err == nil {
+			date = t
+		}
+	}
+	if err := h.Repo.CheckOut(r.Context(), ownerID, req.EmployeeName, req.EmployeeID, date, req.Source); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

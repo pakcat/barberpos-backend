@@ -12,31 +12,31 @@ type AttendanceRepository struct {
 	DB *db.Postgres
 }
 
-func (r AttendanceRepository) CheckIn(ctx context.Context, ownerUserID int64, name string, employeeID *int64, source string) error {
+func (r AttendanceRepository) CheckIn(ctx context.Context, ownerUserID int64, name string, employeeID *int64, date time.Time, source string) error {
 	if source == "" {
 		source = "cashier"
 	}
-	today := time.Now().Format("2006-01-02")
+	day := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 	_, err := r.DB.Pool.Exec(ctx, `
 		INSERT INTO attendance (owner_user_id, employee_id, employee_name, attendance_date, check_in, status, source, created_at)
 		VALUES ($1,$2,$3,$4, now(), 'present', $5, now())
 		ON CONFLICT (owner_user_id, employee_name, attendance_date)
 		DO UPDATE SET check_in = EXCLUDED.check_in, status = EXCLUDED.status, source = EXCLUDED.source
-	`, ownerUserID, employeeID, name, today, source)
+	`, ownerUserID, employeeID, name, day, source)
 	return err
 }
 
-func (r AttendanceRepository) CheckOut(ctx context.Context, ownerUserID int64, name string, employeeID *int64, source string) error {
+func (r AttendanceRepository) CheckOut(ctx context.Context, ownerUserID int64, name string, employeeID *int64, date time.Time, source string) error {
 	if source == "" {
 		source = "cashier"
 	}
-	today := time.Now().Format("2006-01-02")
+	day := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 	_, err := r.DB.Pool.Exec(ctx, `
 		INSERT INTO attendance (owner_user_id, employee_id, employee_name, attendance_date, check_out, status, source, created_at)
 		VALUES ($1,$2,$3,$4, now(), 'present', $5, now())
 		ON CONFLICT (owner_user_id, employee_name, attendance_date)
 		DO UPDATE SET check_out = EXCLUDED.check_out, source = EXCLUDED.source
-	`, ownerUserID, employeeID, name, today, source)
+	`, ownerUserID, employeeID, name, day, source)
 	return err
 }
 

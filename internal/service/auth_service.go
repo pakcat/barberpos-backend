@@ -36,6 +36,7 @@ type AuthResult struct {
 	RefreshToken string
 	User         domain.User
 	ExpiresAt    time.Time
+	Permissions  []string
 }
 
 type RegisterInput struct {
@@ -231,7 +232,12 @@ func (s AuthService) LoginEmployee(ctx context.Context, in EmployeeLoginInput) (
 		user.PasswordHash = emp.PinHash
 	}
 	user.Role = domain.RoleStaff // enforce staff role for employee login
-	return s.issueTokens(user)
+	res, err := s.issueTokens(user)
+	if err != nil {
+		return nil, err
+	}
+	res.Permissions = emp.AllowedModules
+	return res, nil
 }
 
 func (s AuthService) Refresh(ctx context.Context, in RefreshInput) (*AuthResult, error) {
