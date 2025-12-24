@@ -11,9 +11,21 @@ WHERE owner_user_id IS NULL;
 ALTER TABLE products
   ALTER COLUMN owner_user_id SET NOT NULL;
 
-ALTER TABLE products
-  ADD CONSTRAINT IF NOT EXISTS products_owner_user_id_fkey
-  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE;
+-- Postgres doesn't support `ADD CONSTRAINT IF NOT EXISTS`, so guard manually.
+-- +goose StatementBegin
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    WHERE c.conname = 'products_owner_user_id_fkey'
+  ) THEN
+    ALTER TABLE products
+      ADD CONSTRAINT products_owner_user_id_fkey
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+-- +goose StatementEnd
 
 CREATE INDEX IF NOT EXISTS idx_products_owner_user_id
   ON products (owner_user_id);
