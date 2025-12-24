@@ -13,18 +13,11 @@ DELETE FROM stocks
 WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 -- +goose StatementEnd
 
--- Postgres doesn't support `ADD CONSTRAINT IF NOT EXISTS`, so emulate it.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint c
-    WHERE c.conname = 'stocks_product_id_unique'
-  ) THEN
-    ALTER TABLE stocks
-      ADD CONSTRAINT stocks_product_id_unique UNIQUE (product_id);
-  END IF;
-END $$;
+-- Goose splits statements on semicolons unless wrapped in StatementBegin/End.
+-- Use a unique index with IF NOT EXISTS (works well for Postgres and is idempotent).
+CREATE UNIQUE INDEX IF NOT EXISTS stocks_product_id_unique
+ON stocks (product_id)
+WHERE product_id IS NOT NULL;
 
 -- Create missing stock rows for products that track stock.
 INSERT INTO stocks (product_id, name, category, image, stock, transactions, created_at, updated_at)
