@@ -97,6 +97,10 @@ type Settings struct {
 	ReceiptFooter        string
 	DefaultPaymentMethod string
 	PrinterName          string
+	PrinterType          string
+	PrinterHost          string
+	PrinterPort          int
+	PrinterMac           string
 	PaperSize            string
 	AutoPrint            bool
 	Notifications        bool

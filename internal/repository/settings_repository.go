@@ -21,6 +21,10 @@ func defaultSettings() domain.Settings {
 		ReceiptFooter:        "Terima kasih",
 		DefaultPaymentMethod: "cash",
 		PrinterName:          "",
+		PrinterType:          "system",
+		PrinterHost:          "",
+		PrinterPort:          9100,
+		PrinterMac:           "",
 		PaperSize:            "80mm",
 		AutoPrint:            false,
 		Notifications:        true,
@@ -35,14 +39,16 @@ func defaultSettings() domain.Settings {
 func (r SettingsRepository) Get(ctx context.Context) (*domain.Settings, error) {
 	row := r.DB.Pool.QueryRow(ctx, `
 		SELECT business_name, business_address, business_phone, receipt_footer, default_payment_method,
-		       printer_name, paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at
+		       printer_name, printer_type, printer_host, printer_port, printer_mac,
+		       paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at
 		FROM settings
 		WHERE id=1
 	`)
 	var s domain.Settings
 	if err := row.Scan(
 		&s.BusinessName, &s.BusinessAddress, &s.BusinessPhone, &s.ReceiptFooter, &s.DefaultPaymentMethod,
-		&s.PrinterName, &s.PaperSize, &s.AutoPrint, &s.Notifications, &s.TrackStock, &s.RoundingPrice, &s.AutoBackup, &s.CashierPin, &s.CurrencyCode, &s.UpdatedAt,
+		&s.PrinterName, &s.PrinterType, &s.PrinterHost, &s.PrinterPort, &s.PrinterMac,
+		&s.PaperSize, &s.AutoPrint, &s.Notifications, &s.TrackStock, &s.RoundingPrice, &s.AutoBackup, &s.CashierPin, &s.CurrencyCode, &s.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			def := defaultSettings()
@@ -56,8 +62,9 @@ func (r SettingsRepository) Get(ctx context.Context) (*domain.Settings, error) {
 func (r SettingsRepository) Save(ctx context.Context, s domain.Settings) (*domain.Settings, error) {
 	err := r.DB.Pool.QueryRow(ctx, `
 		INSERT INTO settings (id, business_name, business_address, business_phone, receipt_footer, default_payment_method,
-		                      printer_name, paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at)
-		VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now())
+		                      printer_name, printer_type, printer_host, printer_port, printer_mac,
+		                      paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at)
+		VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, now())
 		ON CONFLICT (id) DO UPDATE SET
 			business_name=EXCLUDED.business_name,
 			business_address=EXCLUDED.business_address,
@@ -65,6 +72,10 @@ func (r SettingsRepository) Save(ctx context.Context, s domain.Settings) (*domai
 			receipt_footer=EXCLUDED.receipt_footer,
 			default_payment_method=EXCLUDED.default_payment_method,
 			printer_name=EXCLUDED.printer_name,
+			printer_type=EXCLUDED.printer_type,
+			printer_host=EXCLUDED.printer_host,
+			printer_port=EXCLUDED.printer_port,
+			printer_mac=EXCLUDED.printer_mac,
 			paper_size=EXCLUDED.paper_size,
 			auto_print=EXCLUDED.auto_print,
 			notifications=EXCLUDED.notifications,
@@ -75,10 +86,14 @@ func (r SettingsRepository) Save(ctx context.Context, s domain.Settings) (*domai
 			currency_code=EXCLUDED.currency_code,
 			updated_at=now()
 		RETURNING business_name, business_address, business_phone, receipt_footer, default_payment_method,
-		          printer_name, paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at
-	`, s.BusinessName, s.BusinessAddress, s.BusinessPhone, s.ReceiptFooter, s.DefaultPaymentMethod, s.PrinterName, s.PaperSize, s.AutoPrint, s.Notifications, s.TrackStock, s.RoundingPrice, s.AutoBackup, s.CashierPin, s.CurrencyCode).Scan(
+		          printer_name, printer_type, printer_host, printer_port, printer_mac,
+		          paper_size, auto_print, notifications, track_stock, rounding_price, auto_backup, cashier_pin, currency_code, updated_at
+	`, s.BusinessName, s.BusinessAddress, s.BusinessPhone, s.ReceiptFooter, s.DefaultPaymentMethod,
+		s.PrinterName, s.PrinterType, s.PrinterHost, s.PrinterPort, s.PrinterMac,
+		s.PaperSize, s.AutoPrint, s.Notifications, s.TrackStock, s.RoundingPrice, s.AutoBackup, s.CashierPin, s.CurrencyCode).Scan(
 		&s.BusinessName, &s.BusinessAddress, &s.BusinessPhone, &s.ReceiptFooter, &s.DefaultPaymentMethod,
-		&s.PrinterName, &s.PaperSize, &s.AutoPrint, &s.Notifications, &s.TrackStock, &s.RoundingPrice, &s.AutoBackup, &s.CashierPin, &s.CurrencyCode, &s.UpdatedAt,
+		&s.PrinterName, &s.PrinterType, &s.PrinterHost, &s.PrinterPort, &s.PrinterMac,
+		&s.PaperSize, &s.AutoPrint, &s.Notifications, &s.TrackStock, &s.RoundingPrice, &s.AutoBackup, &s.CashierPin, &s.CurrencyCode, &s.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

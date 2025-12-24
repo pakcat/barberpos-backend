@@ -1,0 +1,16 @@
+-- +goose Up
+ALTER TABLE settings
+ADD COLUMN IF NOT EXISTS printer_type TEXT NOT NULL DEFAULT 'system',
+ADD COLUMN IF NOT EXISTS printer_host TEXT NOT NULL DEFAULT '',
+ADD COLUMN IF NOT EXISTS printer_port INTEGER NOT NULL DEFAULT 9100,
+ADD COLUMN IF NOT EXISTS printer_mac TEXT NOT NULL DEFAULT '';
+
+-- +goose Down
+ALTER TABLE settings
+DROP COLUMN IF EXISTS printer_mac;
+ALTER TABLE settings
+DROP COLUMN IF EXISTS printer_port;
+ALTER TABLE settings
+DROP COLUMN IF EXISTS printer_host;
+ALTER TABLE settings
+DROP COLUMN IF EXISTS printer_type;

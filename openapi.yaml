@@ -11,6 +11,17 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status: { type: string }
   /auth/register:
     post:
       summary: Register with email/password
@@ -1702,6 +1713,10 @@ components:
         receiptFooter: { type: string }
         defaultPaymentMethod: { type: string }
         printerName: { type: string }
+        printerType: { type: string, enum: [system, lan, bluetooth] }
+        printerHost: { type: string }
+        printerPort: { type: integer }
+        printerMac: { type: string }
         paperSize: { type: string }
         autoPrint: { type: boolean }
         notifications: { type: boolean }

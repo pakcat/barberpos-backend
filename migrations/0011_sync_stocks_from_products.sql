@@ -13,8 +13,18 @@ DELETE FROM stocks
 WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 -- +goose StatementEnd
 
-ALTER TABLE stocks
-    ADD CONSTRAINT IF NOT EXISTS stocks_product_id_unique UNIQUE (product_id);
+-- Postgres doesn't support `ADD CONSTRAINT IF NOT EXISTS`, so emulate it.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    WHERE c.conname = 'stocks_product_id_unique'
+  ) THEN
+    ALTER TABLE stocks
+      ADD CONSTRAINT stocks_product_id_unique UNIQUE (product_id);
+  END IF;
+END $$;
 
 -- Create missing stock rows for products that track stock.
 INSERT INTO stocks (product_id, name, category, image, stock, transactions, created_at, updated_at)
@@ -48,4 +58,3 @@ WHERE s.product_id = p.id
 
 -- +goose Down
 -- Keep constraint; do not drop in down migration.
-
