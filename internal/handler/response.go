@@ -12,7 +12,7 @@ type apiError struct {
 
 type apiResponse struct {
 	Status  string    `json:"status"`
-	Message string    `json:"message,omitempty"`
+	Message string    `json:"message"`
 	Data    any       `json:"data"`
 	Error   *apiError `json:"error,omitempty"`
 }
@@ -26,8 +26,9 @@ func writeRawJSON(w http.ResponseWriter, status int, payload any) {
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	if status >= 400 {
 		writeRawJSON(w, status, apiResponse{
-			Status: "error",
-			Data:   payload,
+			Status:  "error",
+			Message: "",
+			Data:    payload,
 			Error: &apiError{
 				Code:   status,
 				Status: http.StatusText(status),
@@ -36,8 +37,9 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 		return
 	}
 	writeRawJSON(w, status, apiResponse{
-		Status: "success",
-		Data:   payload,
+		Status:  "ok",
+		Message: "",
+		Data:    payload,
 	})
 }
 

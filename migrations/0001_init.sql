@@ -193,6 +193,7 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     type TEXT NOT NULL DEFAULT 'info',
     logged_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     synced BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ
 );
 
