@@ -180,7 +180,7 @@ func (h AuthHandler) resetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h AuthHandler) changePassword(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +209,7 @@ func (h AuthHandler) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func writeAuthResponse(w http.ResponseWriter, res *service.AuthResult) {

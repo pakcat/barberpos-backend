@@ -77,7 +77,7 @@ func (h ClosingHandler) create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "id": id})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
 }
 
 func (h ClosingHandler) list(w http.ResponseWriter, r *http.Request) {

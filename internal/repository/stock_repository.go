@@ -14,6 +14,82 @@ type StockRepository struct {
 	DB *db.Postgres
 }
 
+func (r StockRepository) SyncFromProducts(ctx context.Context) error {
+	tx, err := r.DB.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Remove duplicates (keep smallest id) before enforcing uniqueness.
+	if _, err := tx.Exec(ctx, `
+		WITH ranked AS (
+			SELECT id,
+				   ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY id ASC) AS rn
+			FROM stocks
+			WHERE product_id IS NOT NULL
+		)
+		DELETE FROM stocks
+		WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
+	`); err != nil {
+		return err
+	}
+
+	// Ensure 1 stock row per product_id.
+	if _, err := tx.Exec(ctx, `
+		CREATE UNIQUE INDEX IF NOT EXISTS stocks_product_id_unique
+		ON stocks (product_id)
+		WHERE product_id IS NOT NULL
+	`); err != nil {
+		return err
+	}
+
+	// Create missing stock rows for tracked products.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO stocks (product_id, name, category, image, stock, transactions, created_at, updated_at)
+		SELECT p.id, p.name, p.category, p.image, p.stock, 0, now(), now()
+		FROM products p
+		WHERE p.deleted_at IS NULL AND p.track_stock = TRUE
+		  AND NOT EXISTS (
+			  SELECT 1 FROM stocks s WHERE s.product_id = p.id AND s.deleted_at IS NULL
+		  )
+	`); err != nil {
+		return err
+	}
+
+	// Sync tracked product fields.
+	if _, err := tx.Exec(ctx, `
+		UPDATE stocks s
+		SET name = p.name,
+			category = p.category,
+			image = p.image,
+			stock = p.stock,
+			updated_at = now(),
+			deleted_at = NULL
+		FROM products p
+		WHERE s.product_id = p.id
+		  AND p.deleted_at IS NULL
+		  AND p.track_stock = TRUE
+	`); err != nil {
+		return err
+	}
+
+	// Soft-delete stocks for non-tracked products.
+	if _, err := tx.Exec(ctx, `
+		UPDATE stocks s
+		SET deleted_at = now(),
+			updated_at = now()
+		FROM products p
+		WHERE s.product_id = p.id
+		  AND (p.deleted_at IS NOT NULL OR p.track_stock = FALSE)
+		  AND s.deleted_at IS NULL
+	`); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r StockRepository) AdjustByProductIDWithTx(ctx context.Context, tx pgx.Tx, productID int64, delta int, typ string, note string) error {
 	row := tx.QueryRow(ctx, `
 		SELECT id, stock

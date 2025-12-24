@@ -115,6 +115,22 @@ func main() {
 	homeHandler := handler.HomeHandler{}
 	docsHandler := handler.DocsHandler{OpenAPIPath: "openapi.yaml"}
 
+	// Best-effort bootstrap: ensure core reference data exists so fresh installs aren't empty.
+	// These are idempotent and safe to run on every start.
+	if err := regionRepo.SeedDefaults(ctx); err != nil {
+		logger.Warn("bootstrap regions failed", "err", err)
+	}
+	if err := categoryRepo.SeedDefaults(ctx); err != nil {
+		logger.Warn("bootstrap categories failed", "err", err)
+	}
+	if err := productRepo.SeedDefaults(ctx); err != nil {
+		logger.Warn("bootstrap products failed", "err", err)
+	}
+	if err := stockRepo.SyncFromProducts(ctx); err != nil {
+		logger.Warn("bootstrap stocks sync failed", "err", err)
+	}
+	_, _ = settingsRepo.Get(ctx)
+
 	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, regionHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, activityLogHandler, paymentHandler, fcmHandler, notificationHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
 
 	if err := server.Start(ctx, cfg, router, logger); err != nil {

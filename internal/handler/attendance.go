@@ -36,7 +36,7 @@ func (h AttendanceHandler) checkIn(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h AttendanceHandler) checkOut(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +56,7 @@ func (h AttendanceHandler) checkOut(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h AttendanceHandler) listMonth(w http.ResponseWriter, r *http.Request) {

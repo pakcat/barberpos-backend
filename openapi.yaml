@@ -153,7 +153,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        nullable: true
+                        type: object
+                        properties:
+                          code: { type: string }
   /auth/reset-password:
     post:
       summary: Reset password (dummy success if token==1234)
@@ -179,7 +181,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        nullable: true
+                        type: object
+                        properties:
+                          ok: { type: boolean }
   /auth/change-password:
     post:
       summary: Change password for current user
@@ -207,7 +211,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        nullable: true
+                        type: object
+                        properties:
+                          ok: { type: boolean }
   /regions:
     get:
       summary: List regions
@@ -288,7 +294,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        nullable: true
+                        type: object
+                        properties:
+                          ok: { type: boolean }
   /services:
     get:
       summary: List services (same as products)
@@ -378,7 +386,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        nullable: true
+                        type: object
+                        properties:
+                          ok: { type: boolean }
   /customers:
     get:
       summary: List customers
@@ -443,7 +453,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        nullable: true
+                        type: object
+                        properties:
+                          ok: { type: boolean }
   /orders:
     post:
       summary: Create order/transaction
@@ -729,7 +741,7 @@ paths:
                       data:
                         type: object
                         properties:
-                          status: { type: string }
+                          ok: { type: boolean }
   /attendance/checkout:
     post:
       summary: Check-out attendance
@@ -760,7 +772,7 @@ paths:
                       data:
                         type: object
                         properties:
-                          status: { type: string }
+                          ok: { type: boolean }
   /attendance:
     get:
       summary: Get attendance for month
@@ -989,7 +1001,7 @@ paths:
                       data:
                         type: object
                         properties:
-                          status: { type: string }
+                          ok: { type: boolean }
                           id: { type: integer, format: int64 }
   /settings:
     get:
@@ -1416,7 +1428,7 @@ paths:
                       data:
                         type: object
                         properties:
-                          status: { type: string }
+                          ok: { type: boolean }
   /notifications/token:
     post:
       summary: Register FCM token
@@ -1446,7 +1458,7 @@ paths:
                       data:
                         type: object
                         properties:
-                          status: { type: string }
+                          ok: { type: boolean }
   /notifications:
     get:
       summary: List notifications
@@ -1577,7 +1589,7 @@ paths:
                       data:
                         type: object
                         properties:
-                          status: { type: string }
+                          ok: { type: boolean }
                           id: { type: integer, format: int64 }
 
 components:

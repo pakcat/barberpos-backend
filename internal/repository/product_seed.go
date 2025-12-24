@@ -17,14 +17,57 @@ func (r ProductRepository) SeedDefaults(ctx context.Context) error {
 	}
 
 	for _, p := range defaults {
-		// Idempotent: products.name is unique.
-		_, err := r.DB.Pool.Exec(ctx, `
+		var (
+			productID   int64
+			name        string
+			category    string
+			image       string
+			trackStock  bool
+			stock       int
+		)
+
+		// Idempotent: products.name is unique. Also restores soft-deleted defaults.
+		err := r.DB.Pool.QueryRow(ctx, `
 			INSERT INTO products (name, category, price, image, track_stock, stock, min_stock, created_at, updated_at)
 			VALUES ($1,$2,$3,'',$4,$5,$6, now(), now())
-			ON CONFLICT (name) DO NOTHING
-		`, p.Name, p.Category, p.Price.Amount, p.TrackStock, p.Stock, p.MinStock)
+			ON CONFLICT (name) DO UPDATE SET
+				category=EXCLUDED.category,
+				price=EXCLUDED.price,
+				image=EXCLUDED.image,
+				track_stock=EXCLUDED.track_stock,
+				stock=EXCLUDED.stock,
+				min_stock=EXCLUDED.min_stock,
+				updated_at=now(),
+				deleted_at=NULL
+			RETURNING id, name, category, image, track_stock, stock
+		`, p.Name, p.Category, p.Price.Amount, p.TrackStock, p.Stock, p.MinStock).Scan(
+			&productID, &name, &category, &image, &trackStock, &stock,
+		)
 		if err != nil {
 			return err
+		}
+
+		// Keep stocks table in sync for tracked defaults.
+		if trackStock {
+			// Insert if missing, then update to desired values (works even without a unique index).
+			_, _ = r.DB.Pool.Exec(ctx, `
+				INSERT INTO stocks (product_id, name, category, image, stock, transactions, created_at, updated_at)
+				SELECT $1,$2,$3,$4,$5,0, now(), now()
+				WHERE NOT EXISTS (
+					SELECT 1 FROM stocks s WHERE s.product_id=$1 AND s.deleted_at IS NULL
+				)
+			`, productID, name, category, image, stock)
+			_, _ = r.DB.Pool.Exec(ctx, `
+				UPDATE stocks
+				SET name=$2, category=$3, image=$4, stock=$5, updated_at=now(), deleted_at=NULL
+				WHERE product_id=$1
+			`, productID, name, category, image, stock)
+		} else {
+			_, _ = r.DB.Pool.Exec(ctx, `
+				UPDATE stocks
+				SET deleted_at=now(), updated_at=now()
+				WHERE product_id=$1 AND deleted_at IS NULL
+			`, productID)
 		}
 	}
 	return nil
