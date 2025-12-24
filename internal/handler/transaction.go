@@ -36,6 +36,7 @@ func (h TransactionHandler) RegisterRoutes(r chi.Router) {
 
 type orderPayload struct {
 	Items         []orderLine `json:"items"`
+	ClientRef     string      `json:"clientRef"`
 	Total         int64       `json:"total"`
 	Paid          int64       `json:"paid"`
 	Change        int64       `json:"change"`
@@ -89,6 +90,10 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 
 	unitsToConsume := countUnits(req.Items)
 
+	var clientRef *string
+	if req.ClientRef != "" {
+		clientRef = &req.ClientRef
+	}
 	tx, err := h.Repo.Create(r.Context(), repository.CreateTransactionInput{
 		PaymentMethod: req.PaymentMethod,
 		Stylist:       req.Stylist,
@@ -97,6 +102,7 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 		Amount:        req.Total,
 		Items:         items,
 		ShiftID:       strPtr(req.ShiftID),
+		ClientRef:     clientRef,
 	}, func(ctx context.Context, tx pgx.Tx) error {
 		for _, it := range items {
 			if it.ProductID == nil || it.Qty <= 0 {
@@ -384,11 +390,26 @@ func (h TransactionHandler) markPaid(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "code is required")
 		return
 	}
-	if err := h.Repo.MarkPaidByCode(r.Context(), code); err != nil {
+	tx, err := h.Repo.DB.Pool.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	if err := h.Repo.MarkPaidByCodeWithTx(r.Context(), tx, code); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "transaction not found")
 			return
 		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Best-effort: remove refund finance entry when undoing refund.
+	_ = h.Finance.DeleteRefundByTransactionCodeWithTx(r.Context(), tx, code)
+
+	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

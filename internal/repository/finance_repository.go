@@ -109,3 +109,15 @@ func (r FinanceRepository) ListFiltered(ctx context.Context, startDate, endDate 
 	}
 	return items, rows.Err()
 }
+
+func (r FinanceRepository) DeleteRefundByTransactionCodeWithTx(ctx context.Context, tx pgx.Tx, code string) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE finance_entries
+		SET deleted_at=now()
+		WHERE deleted_at IS NULL
+		  AND transaction_code=$1
+		  AND category='Refund'
+		  AND type='expense'
+	`, code)
+	return err
+}

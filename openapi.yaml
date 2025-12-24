@@ -1679,6 +1679,7 @@ components:
     OrderRequest:
       type: object
       properties:
+        clientRef: { type: string }
         items:
           type: array
           items:

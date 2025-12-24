@@ -124,6 +124,7 @@ type CreateTransactionInput struct {
 	CustomerLastVisit *string
 	ShiftID           *string
 	OperatorName      string
+	ClientRef         *string
 	Amount            int64
 	Items             []CreateTransactionItem
 }
@@ -143,6 +144,19 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 	}
 	defer tx.Rollback(ctx)
 
+	if in.ClientRef != nil && *in.ClientRef != "" {
+		existing, err := r.getByClientRefWithTx(ctx, tx, *in.ClientRef)
+		if err == nil {
+			if err := tx.Commit(ctx); err != nil {
+				return nil, err
+			}
+			return existing, nil
+		}
+		if err != nil && err != ErrNotFound {
+			return nil, err
+		}
+	}
+
 	code := fmt.Sprintf("ORD-%d", time.Now().UnixNano()/1e6)
 	now := time.Now()
 	var id int64
@@ -152,12 +166,12 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transactions
-		(code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
+		(code, client_ref, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		 customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
 		 shift_id, operator_name, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, now(), now())
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, now(), now())
 		RETURNING id
-	`, code, now.Format("2006-01-02"), now.Format("15:04"), in.Amount, in.PaymentMethod, domain.TransactionPaid, in.Stylist, in.StylistID,
+	`, code, in.ClientRef, now.Format("2006-01-02"), now.Format("15:04"), in.Amount, in.PaymentMethod, domain.TransactionPaid, in.Stylist, in.StylistID,
 		in.CustomerName, in.CustomerPhone, in.CustomerEmail, in.CustomerAddr, in.CustomerVisits, in.CustomerLastVisit,
 		in.ShiftID, in.OperatorName).Scan(&id)
 	if err != nil {
@@ -206,6 +220,103 @@ func (r TransactionRepository) Create(ctx context.Context, in CreateTransactionI
 		CreatedAt: now,
 		UpdatedAt: now,
 	}, nil
+}
+
+func (r TransactionRepository) getByClientRefWithTx(ctx context.Context, tx pgx.Tx, clientRef string) (*domain.Transaction, error) {
+	row := tx.QueryRow(ctx, `
+		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
+		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
+		       shift_id, operator_name, refunded_at, refunded_by, refund_note, created_at, updated_at, deleted_at
+		FROM transactions
+		WHERE deleted_at IS NULL AND client_ref = $1
+		LIMIT 1
+	`, clientRef)
+	var t domain.Transaction
+	var status string
+	var customerName, customerPhone, customerEmail, customerAddress pgtype.Text
+	var visits pgtype.Int4
+	var lastVisit pgtype.Text
+	var shiftID pgtype.Text
+	var opName pgtype.Text
+	var stylistID pgtype.Int8
+	var refundedAt pgtype.Timestamptz
+	var refundedBy pgtype.Int8
+	var refundNote pgtype.Text
+	var deletedAt pgtype.Timestamptz
+	if err := row.Scan(
+		&t.ID, &t.Code, &t.Date, &t.Time, &t.Amount.Amount, &t.PaymentMethod, &status, &t.Stylist, &stylistID,
+		&customerName, &customerPhone, &customerEmail, &customerAddress, &visits, &lastVisit,
+		&shiftID, &opName, &refundedAt, &refundedBy, &refundNote, &t.CreatedAt, &t.UpdatedAt, &deletedAt,
+	); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if stylistID.Valid {
+		t.StylistID = &stylistID.Int64
+	}
+	t.Status = domain.TransactionStatus(status)
+	t.Customer = &domain.TransactionCustomerSnapshot{
+		Name:    customerName.String,
+		Phone:   customerPhone.String,
+		Email:   customerEmail.String,
+		Address: customerAddress.String,
+	}
+	if visits.Valid {
+		v := int(visits.Int32)
+		t.Customer.Visits = &v
+	}
+	if lastVisit.Valid {
+		lv := lastVisit.String
+		t.Customer.LastVisit = &lv
+	}
+	if shiftID.Valid {
+		s := shiftID.String
+		t.ShiftID = &s
+	}
+	if opName.Valid {
+		t.OperatorName = opName.String
+	}
+	if refundedAt.Valid {
+		rt := refundedAt.Time
+		t.RefundedAt = &rt
+	}
+	if refundedBy.Valid {
+		rb := refundedBy.Int64
+		t.RefundedBy = &rb
+	}
+	if refundNote.Valid {
+		t.RefundNote = refundNote.String
+	}
+	if deletedAt.Valid {
+		d := deletedAt.Time
+		t.DeletedAt = &d
+	}
+
+	itemRows, err := tx.Query(ctx, `
+		SELECT transaction_id, id, product_id, name, category, price, qty, created_at
+		FROM transaction_items
+		WHERE transaction_id=$1 AND deleted_at IS NULL
+	`, t.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer itemRows.Close()
+
+	for itemRows.Next() {
+		var it domain.TransactionItem
+		var txID int64
+		if err := itemRows.Scan(&txID, &it.ID, &it.ProductID, &it.Name, &it.Category, &it.Price.Amount, &it.Qty, &it.CreatedAt); err != nil {
+			return nil, err
+		}
+		it.TransactionID = txID
+		t.Items = append(t.Items, it)
+	}
+	if err := itemRows.Err(); err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
 
 func mapItems(items []CreateTransactionItem) []domain.TransactionItem {
@@ -446,6 +557,26 @@ func (r TransactionRepository) ListFiltered(ctx context.Context, startDate, endD
 
 func (r TransactionRepository) MarkPaidByCode(ctx context.Context, code string) error {
 	ct, err := r.DB.Pool.Exec(ctx, `
+		UPDATE transactions
+		SET status='paid',
+		    refunded_at=NULL,
+		    refunded_by=NULL,
+		    refund_note='',
+		    deleted_at=NULL,
+		    updated_at=now()
+		WHERE code=$1
+	`, code)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r TransactionRepository) MarkPaidByCodeWithTx(ctx context.Context, tx pgx.Tx, code string) error {
+	ct, err := tx.Exec(ctx, `
 		UPDATE transactions
 		SET status='paid',
 		    refunded_at=NULL,
