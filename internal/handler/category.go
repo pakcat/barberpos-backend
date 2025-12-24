@@ -25,6 +25,12 @@ func (h CategoryHandler) list(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if len(items) == 0 {
+		_ = h.Repo.SeedDefaults(r.Context())
+		if seeded, seedErr := h.Repo.List(r.Context()); seedErr == nil {
+			items = seeded
+		}
+	}
 	resp := make([]map[string]any, 0, len(items))
 	for _, c := range items {
 		resp = append(resp, map[string]any{

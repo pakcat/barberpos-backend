@@ -23,7 +23,7 @@ type pgxQuerier interface {
 }
 
 type SaveMembershipStateParams struct {
-	OwnerUserID    int64
+	OwnerUserID     int64
 	UsedQuota       int
 	FreeUsed        int
 	FreePeriodStart time.Time
@@ -142,7 +142,7 @@ func (r MembershipRepository) getStateWith(ctx context.Context, q pgxQuerier, ow
 			now := time.Now()
 			start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 			return r.saveStateWith(ctx, q, SaveMembershipStateParams{
-				OwnerUserID:    ownerUserID,
+				OwnerUserID:     ownerUserID,
 				UsedQuota:       0,
 				FreeUsed:        0,
 				FreePeriodStart: start,

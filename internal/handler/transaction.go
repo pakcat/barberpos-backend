@@ -9,8 +9,8 @@ import (
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
-	"barberpos-backend/internal/service"
 	"barberpos-backend/internal/server/authctx"
+	"barberpos-backend/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )

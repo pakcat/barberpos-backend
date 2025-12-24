@@ -75,7 +75,7 @@ func (s MembershipService) ConsumeWithTx(ctx context.Context, tx pgx.Tx, ownerUs
 	state.UsedQuota = state.FreeUsed + int(totalTopups-int64(state.TopupBal))
 
 	return s.Repo.SaveStateWithTx(ctx, tx, repository.SaveMembershipStateParams{
-		OwnerUserID:    ownerUserID,
+		OwnerUserID:     ownerUserID,
 		UsedQuota:       state.UsedQuota,
 		FreeUsed:        state.FreeUsed,
 		FreePeriodStart: state.FreeStart,
@@ -103,7 +103,7 @@ func (s MembershipService) normalizeUsed(ctx context.Context, tx pgx.Tx, ownerUs
 	state.UsedQuota = freeUsed + topupUsed
 
 	return s.Repo.SaveStateWithTx(ctx, tx, repository.SaveMembershipStateParams{
-		OwnerUserID:    ownerUserID,
+		OwnerUserID:     ownerUserID,
 		UsedQuota:       state.UsedQuota,
 		FreeUsed:        state.FreeUsed,
 		FreePeriodStart: state.FreeStart,
@@ -130,7 +130,7 @@ func (s MembershipService) ensureState(ctx context.Context, tx pgx.Tx, ownerUser
 	}
 	state.UsedQuota = state.FreeUsed + int(totalTopups-int64(state.TopupBal))
 	return s.Repo.SaveStateWithTx(ctx, tx, repository.SaveMembershipStateParams{
-		OwnerUserID:    ownerUserID,
+		OwnerUserID:     ownerUserID,
 		UsedQuota:       state.UsedQuota,
 		FreeUsed:        state.FreeUsed,
 		FreePeriodStart: state.FreeStart,

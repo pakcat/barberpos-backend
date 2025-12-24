@@ -2,13 +2,34 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"barberpos-backend/internal/db"
 	"barberpos-backend/internal/domain"
+	"github.com/jackc/pgx/v5"
 )
 
 type SettingsRepository struct {
 	DB *db.Postgres
+}
+
+func defaultSettings() domain.Settings {
+	return domain.Settings{
+		BusinessName:         "BarberPOS",
+		BusinessAddress:      "",
+		BusinessPhone:        "",
+		ReceiptFooter:        "Terima kasih",
+		DefaultPaymentMethod: "cash",
+		PrinterName:          "",
+		PaperSize:            "80mm",
+		AutoPrint:            false,
+		Notifications:        true,
+		TrackStock:           true,
+		RoundingPrice:        false,
+		AutoBackup:           false,
+		CashierPin:           false,
+		CurrencyCode:         "IDR",
+	}
 }
 
 func (r SettingsRepository) Get(ctx context.Context) (*domain.Settings, error) {
@@ -23,6 +44,10 @@ func (r SettingsRepository) Get(ctx context.Context) (*domain.Settings, error) {
 		&s.BusinessName, &s.BusinessAddress, &s.BusinessPhone, &s.ReceiptFooter, &s.DefaultPaymentMethod,
 		&s.PrinterName, &s.PaperSize, &s.AutoPrint, &s.Notifications, &s.TrackStock, &s.RoundingPrice, &s.AutoBackup, &s.CashierPin, &s.CurrencyCode, &s.UpdatedAt,
 	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			def := defaultSettings()
+			return r.Save(ctx, def)
+		}
 		return nil, err
 	}
 	return &s, nil

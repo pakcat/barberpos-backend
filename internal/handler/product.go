@@ -25,6 +25,14 @@ func (h ProductHandler) listProducts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if len(items) == 0 {
+		// Best-effort: seed a minimal default catalog so the app isn't empty on fresh installs.
+		// If it fails (e.g., read-only DB), just return the empty list.
+		_ = h.Repo.SeedDefaults(r.Context())
+		if seeded, seedErr := h.Repo.List(r.Context()); seedErr == nil {
+			items = seeded
+		}
+	}
 	writeJSON(w, http.StatusOK, toProductResponses(items))
 }
 

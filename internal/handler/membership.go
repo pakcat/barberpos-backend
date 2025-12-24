@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"barberpos-backend/internal/repository"
-	"barberpos-backend/internal/service"
 	"barberpos-backend/internal/server/authctx"
+	"barberpos-backend/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -119,10 +119,10 @@ func (h MembershipHandler) createTopup(w http.ResponseWriter, r *http.Request) {
 	}
 	topup, err := h.Service.Repo.CreateTopup(r.Context(), repository.CreateTopupInput{
 		OwnerUserID: user.ID,
-		Amount:  req.Amount,
-		Manager: req.Manager,
-		Note:    req.Note,
-		Date:    dt,
+		Amount:      req.Amount,
+		Manager:     req.Manager,
+		Note:        req.Note,
+		Date:        dt,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

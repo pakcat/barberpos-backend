@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -27,9 +26,5 @@ func (h HealthHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if err := h.DB.Health(ctx); err != nil {
 		status = "degraded"
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"status": status,
-	})
+	writeJSON(w, http.StatusOK, map[string]string{"status": status})
 }
