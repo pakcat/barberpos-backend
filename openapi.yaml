@@ -26,7 +26,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthResponse'
   /auth/login:
     post:
       summary: Login with email/password
@@ -42,7 +47,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthResponse'
   /auth/google:
     post:
       summary: Login/Register with Google (idToken)
@@ -58,7 +68,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthResponse'
   /auth/staff:
     post:
       summary: Login staff/employee (by phone or email)
@@ -74,7 +89,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthResponse'
   /auth/refresh:
     post:
       summary: Refresh access token
@@ -93,7 +113,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthResponse'
   /auth/forgot-password:
     post:
       summary: Request reset code (dummy 1234)
@@ -109,6 +134,15 @@ paths:
       responses:
         '200':
           description: Code sent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
   /auth/reset-password:
     post:
       summary: Reset password (dummy success if token==1234)
@@ -126,6 +160,15 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
   /auth/change-password:
     post:
       summary: Change password for current user
@@ -145,6 +188,15 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
   /regions:
     get:
       summary: List regions
@@ -154,9 +206,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Region'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Region'
   /products:
     get:
       summary: List products/services
@@ -168,9 +225,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Product'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Product'
     post:
       summary: Upsert product (manager/admin)
       security:
@@ -184,6 +246,15 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
   /products/{id}:
     delete:
       summary: Soft delete product (manager/admin)
@@ -198,6 +269,15 @@ paths:
       responses:
         '200':
           description: Deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
   /services:
     get:
       summary: List services (same as products)
@@ -206,6 +286,17 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Product'
   /categories:
     get:
       summary: List categories
@@ -214,6 +305,17 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Category'
     post:
       summary: Upsert category
       security:
@@ -233,6 +335,15 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Category'
   /categories/{id}:
     delete:
       summary: Delete category
@@ -248,6 +359,15 @@ paths:
       responses:
         '200':
           description: Deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
   /customers:
     get:
       summary: List customers
@@ -256,6 +376,17 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Customer'
     post:
       summary: Upsert customer
       security:
@@ -269,6 +400,15 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Customer'
   /customers/{id}:
     delete:
       summary: Delete customer
@@ -284,6 +424,15 @@ paths:
       responses:
         '200':
           description: Deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
   /orders:
     post:
       summary: Create order/transaction
@@ -298,6 +447,24 @@ paths:
       responses:
         '200':
           description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          code: { type: string }
+                          date: { type: string }
+                          time: { type: string }
+                          amount: { type: integer }
+                          paymentMethod: { type: string }
+                          status: { type: string }
+                          stylist: { type: string }
   /transactions:
     get:
       summary: List transactions
@@ -320,23 +487,36 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id: { type: string }
-                    code: { type: string }
-                    date: { type: string }
-                    time: { type: string }
-                    amount: { type: integer }
-                    paymentMethod: { type: string }
-                    status: { type: string }
-                    stylist: { type: string }
-                    stylistId: { type: integer, format: int64 }
-                    items:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/OrderRequest'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            code: { type: string }
+                            date: { type: string }
+                            time: { type: string }
+                            amount: { type: integer }
+                            paymentMethod: { type: string }
+                            status: { type: string }
+                            refundedAt: { type: string, nullable: true }
+                            refundNote: { type: string }
+                            stylist: { type: string }
+                            stylistId: { type: integer, format: int64 }
+                            items:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  productId: { type: integer, format: int64 }
+                                  name: { type: string }
+                                  category: { type: string }
+                                  price: { type: integer }
+                                  qty: { type: integer }
   /transactions/{code}:
     get:
       summary: Get transaction by code
@@ -354,28 +534,41 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id: { type: string }
-                  code: { type: string }
-                  date: { type: string }
-                  time: { type: string }
-                  amount: { type: integer }
-                  paymentMethod: { type: string }
-                  status: { type: string }
-                  stylist: { type: string }
-                  stylistId: { type: integer, format: int64 }
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/OrderRequest'
-                  customer:
-                    type: object
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
                     properties:
-                      name: { type: string }
-                      phone: { type: string }
-                      email: { type: string }
-                      address: { type: string }
+                      data:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          code: { type: string }
+                          date: { type: string }
+                          time: { type: string }
+                          amount: { type: integer }
+                          paymentMethod: { type: string }
+                          status: { type: string }
+                          refundedAt: { type: string, nullable: true }
+                          refundNote: { type: string }
+                          stylist: { type: string }
+                          stylistId: { type: integer, format: int64 }
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                productId: { type: integer, format: int64 }
+                                name: { type: string }
+                                category: { type: string }
+                                price: { type: integer }
+                                qty: { type: integer }
+                          customer:
+                            type: object
+                            properties:
+                              name: { type: string }
+                              phone: { type: string }
+                              email: { type: string }
+                              address: { type: string }
   /transactions/{code}/refund:
     post:
       summary: Refund a transaction (and optionally delete)
@@ -402,6 +595,15 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
   /transactions/{code}/mark-paid:
     post:
       summary: Mark a transaction as paid (undo refund)
@@ -416,6 +618,15 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
   /payments/qris:
     post:
       summary: Create QRIS payment intent (dummy)
@@ -433,6 +644,22 @@ paths:
       responses:
         '200':
           description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          method: { type: string }
+                          qrString: { type: string }
+                          status: { type: string }
+                          expiresAt: { type: string }
+                          intentId: { type: string }
   /payments/card:
     post:
       summary: Create card payment intent (dummy)
@@ -441,6 +668,22 @@ paths:
       responses:
         '200':
           description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          method: { type: string }
+                          status: { type: string }
+                          reference: { type: string }
+                          intentId: { type: string }
+                          amount: { type: integer }
   /attendance/checkin:
     post:
       summary: Check-in attendance
@@ -461,6 +704,17 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status: { type: string }
   /attendance/checkout:
     post:
       summary: Check-out attendance
@@ -481,6 +735,17 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status: { type: string }
   /attendance:
     get:
       summary: Get attendance for month
@@ -501,6 +766,26 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            employeeId: { type: integer, format: int64, nullable: true }
+                            employeeName: { type: string }
+                            date: { type: string }
+                            checkIn: { type: string, nullable: true }
+                            checkOut: { type: string, nullable: true }
+                            status: { type: string }
+                            source: { type: string }
   /dashboard/summary:
     get:
       summary: Dashboard summary
@@ -512,15 +797,20 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  transaksiHariIni: { type: integer }
-                  omzetHariIni: { type: integer }
-                  customerHariIni: { type: integer }
-                  layananTerjual: { type: integer }
-                  totalRevenue: { type: integer }
-                  totalTransactions: { type: integer }
-                  todayRevenue: { type: integer }
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          transaksiHariIni: { type: integer }
+                          omzetHariIni: { type: integer }
+                          customerHariIni: { type: integer }
+                          layananTerjual: { type: integer }
+                          totalRevenue: { type: integer }
+                          totalTransactions: { type: integer }
+                          todayRevenue: { type: integer }
   /dashboard/top-services:
     get:
       summary: Top services
@@ -532,13 +822,18 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    name: { type: string }
-                    amount: { type: integer }
-                    qty: { type: integer }
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name: { type: string }
+                            amount: { type: integer }
+                            qty: { type: integer }
   /dashboard/top-staff:
     get:
       summary: Top staff
@@ -550,13 +845,18 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    name: { type: string }
-                    amount: { type: integer }
-                    qty: { type: integer }
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name: { type: string }
+                            amount: { type: integer }
+                            qty: { type: integer }
   /dashboard/sales:
     get:
       summary: Sales time series
@@ -574,12 +874,17 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    label: { type: string }
-                    value: { type: integer }
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label: { type: string }
+                            value: { type: integer }
   /closing/summary:
     get:
       summary: Closing summary (today)
@@ -588,6 +893,19 @@ paths:
       responses:
         '200':
           description: Summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          totalCash: { type: integer }
+                          totalNonCash: { type: integer }
+                          totalCard: { type: integer }
   /closing:
     get:
       summary: List closing history
@@ -605,9 +923,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ClosingHistory'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ClosingHistory'
     post:
       summary: Submit closing
       security:
@@ -641,6 +964,18 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status: { type: string }
+                          id: { type: integer, format: int64 }
   /settings:
     get:
       summary: Get settings
@@ -649,6 +984,15 @@ paths:
       responses:
         '200':
           description: Settings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Settings'
     put:
       summary: Update settings
       security:
@@ -662,6 +1006,15 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Settings'
   /finance:
     get:
       summary: List finance entries
@@ -681,6 +1034,17 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FinanceEntry'
     post:
       summary: Create finance entry
       security:
@@ -694,6 +1058,52 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FinanceEntry'
+  /finance/export:
+    get:
+      summary: Export finance entries
+      description: Downloads finance entries as CSV or XLSX using query parameters `format=csv|xlsx` and optional `startDate/endDate` (YYYY-MM-DD).
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [csv, xlsx]
+          required: false
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            example: "2025-01-01"
+          required: false
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            example: "2025-01-31"
+          required: false
+      responses:
+        "200":
+          description: File download
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /membership:
     get:
       summary: Get membership state
@@ -705,7 +1115,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MembershipState'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MembershipState'
     put:
       summary: Update membership state
       security:
@@ -725,7 +1140,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MembershipState'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MembershipState'
   /membership/topups:
     get:
       summary: List membership topups
@@ -734,6 +1154,23 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer, format: int64 }
+                            amount: { type: integer }
+                            manager: { type: string }
+                            note: { type: string }
+                            date: { type: string, format: date-time }
     post:
       summary: Create membership topup
       security:
@@ -757,6 +1194,21 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: integer, format: int64 }
+                          amount: { type: integer }
+                          manager: { type: string }
+                          note: { type: string }
+                          date: { type: string, format: date-time }
   /stock:
     get:
       summary: List stock
@@ -765,6 +1217,25 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer, format: int64 }
+                            productId: { type: integer, format: int64, nullable: true }
+                            name: { type: string }
+                            category: { type: string }
+                            image: { type: string }
+                            stock: { type: integer }
+                            transactions: { type: integer }
   /stock/adjust:
     post:
       summary: Adjust stock
@@ -785,6 +1256,19 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: integer, format: int64 }
+                          stock: { type: integer }
+                          transactions: { type: integer }
   /stock/{id}/history:
     get:
       summary: Stock history
@@ -804,6 +1288,24 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer, format: int64 }
+                            change: { type: integer }
+                            remaining: { type: integer }
+                            note: { type: string }
+                            type: { type: string }
+                            createdAt: {}
   /employees:
     get:
       summary: List employees
@@ -812,6 +1314,27 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer, format: int64 }
+                            managerUserId: { type: integer, format: int64, nullable: true }
+                            name: { type: string }
+                            role: { type: string }
+                            phone: { type: string }
+                            email: { type: string }
+                            joinDate: { type: string }
+                            commission: { type: number, nullable: true }
+                            active: { type: boolean }
     post:
       summary: Upsert employee
       security:
@@ -835,6 +1358,25 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: integer, format: int64 }
+                          managerUserId: { type: integer, format: int64, nullable: true }
+                          name: { type: string }
+                          role: { type: string }
+                          phone: { type: string }
+                          email: { type: string }
+                          joinDate: { type: string }
+                          commission: { type: number, nullable: true }
+                          active: { type: boolean }
   /employees/{id}:
     delete:
       summary: Delete employee
@@ -849,6 +1391,17 @@ paths:
       responses:
         '200':
           description: Deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status: { type: string }
   /notifications/token:
     post:
       summary: Register FCM token
@@ -868,6 +1421,17 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status: { type: string }
   /notifications:
     get:
       summary: List notifications
@@ -876,6 +1440,23 @@ paths:
       responses:
         '200':
           description: List
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer, format: int64 }
+                            title: { type: string }
+                            message: { type: string }
+                            type: { type: string, enum: [info, warning, error] }
+                            timestamp: { type: string, format: date-time }
     post:
       summary: Create notification
       security:
@@ -900,12 +1481,39 @@ paths:
       responses:
         '200':
           description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: integer, format: int64 }
+                          title: { type: string }
+                          message: { type: string }
+                          type: { type: string, enum: [info, warning, error] }
+                          timestamp: { type: string, format: date-time }
   /posts/1:
     get:
       summary: Welcome placeholder
       responses:
         '200':
           description: Welcome
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          title: { type: string }
+                          body: { type: string }
   /logs:
     get:
       summary: List activity logs
@@ -923,9 +1531,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ActivityLog'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ActivityLog'
     post:
       summary: Create activity log (sync)
       security:
@@ -939,6 +1552,18 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status: { type: string }
+                          id: { type: integer, format: int64 }
 
 components:
   securitySchemes:
@@ -947,6 +1572,20 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    ApiError:
+      type: object
+      properties:
+        code: { type: integer }
+        status: { type: string }
+    ApiResponse:
+      type: object
+      required: [status, data]
+      properties:
+        status: { type: string, enum: [success, error] }
+        message: { type: string }
+        data: {}
+        error:
+          $ref: '#/components/schemas/ApiError'
     RegisterRequest:
       type: object
       properties:
@@ -1008,6 +1647,11 @@ components:
         trackStock: { type: boolean }
         stock: { type: integer }
         minStock: { type: integer }
+    Category:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
     Customer:
       type: object
       properties:
@@ -1076,6 +1720,7 @@ components:
         date: { type: string }
         type: { type: string, enum: [revenue, expense] }
         note: { type: string }
+        transactionCode: { type: string, nullable: true }
         staff: { type: string }
         service: { type: string }
     ClosingHistory:
@@ -1115,38 +1760,3 @@ components:
       properties:
         error: { type: string }
         message: { type: string }
-  /finance/export:
-    get:
-      summary: Export finance entries
-      description: Downloads finance entries as CSV or XLSX using query parameters `format=csv|xlsx` and optional `startDate/endDate` (YYYY-MM-DD).
-      parameters:
-        - in: query
-          name: format
-          schema:
-            type: string
-            enum: [csv, xlsx]
-          required: false
-        - in: query
-          name: startDate
-          schema:
-            type: string
-            example: "2025-01-01"
-          required: false
-        - in: query
-          name: endDate
-          schema:
-            type: string
-            example: "2025-01-31"
-          required: false
-      responses:
-        "200":
-          description: File download
-          content:
-            text/csv:
-              schema:
-                type: string
-                format: binary
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary

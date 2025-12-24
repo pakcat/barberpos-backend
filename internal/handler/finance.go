@@ -54,15 +54,16 @@ func (h FinanceHandler) list(w http.ResponseWriter, r *http.Request) {
 	resp := make([]map[string]any, 0, len(items))
 	for _, fe := range items {
 		resp = append(resp, map[string]any{
-			"id":       fe.ID,
-			"title":    fe.Title,
-			"amount":   fe.Amount.Amount,
-			"category": fe.Category,
-			"date":     fe.Date.Format("2006-01-02"),
-			"type":     string(fe.Type),
-			"note":     fe.Note,
-			"staff":    fe.Staff,
-			"service":  fe.Service,
+			"id":              fe.ID,
+			"title":           fe.Title,
+			"amount":          fe.Amount.Amount,
+			"category":        fe.Category,
+			"date":            fe.Date.Format("2006-01-02"),
+			"type":            string(fe.Type),
+			"note":            fe.Note,
+			"transactionCode": fe.TransactionCode,
+			"staff":           fe.Staff,
+			"service":         fe.Service,
 		})
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -135,7 +136,7 @@ func (h FinanceHandler) export(w http.ResponseWriter, r *http.Request) {
 func exportFinanceCSV(items []domain.FinanceEntry) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	w := csv.NewWriter(buf)
-	_ = w.Write([]string{"id", "title", "amount", "category", "date", "type", "note", "staff", "service"})
+	_ = w.Write([]string{"id", "title", "amount", "category", "date", "type", "note", "transaction_code", "staff", "service"})
 	for _, fe := range items {
 		_ = w.Write([]string{
 			strconv.FormatInt(fe.ID, 10),
@@ -145,6 +146,7 @@ func exportFinanceCSV(items []domain.FinanceEntry) ([]byte, error) {
 			fe.Date.Format("2006-01-02"),
 			string(fe.Type),
 			fe.Note,
+			derefString(fe.TransactionCode),
 			derefString(fe.Staff),
 			derefString(fe.Service),
 		})
@@ -163,7 +165,7 @@ func exportFinanceXLSX(items []domain.FinanceEntry) ([]byte, error) {
 	f.DeleteSheet("Sheet1")
 	f.SetActiveSheet(index)
 
-	header := []string{"ID", "Title", "Amount", "Category", "Date", "Type", "Note", "Staff", "Service"}
+	header := []string{"ID", "Title", "Amount", "Category", "Date", "Type", "Note", "Transaction Code", "Staff", "Service"}
 	for c, v := range header {
 		cell, _ := excelize.CoordinatesToCellName(c+1, 1)
 		_ = f.SetCellValue(sheet, cell, v)
@@ -178,6 +180,7 @@ func exportFinanceXLSX(items []domain.FinanceEntry) ([]byte, error) {
 			fe.Date.Format("2006-01-02"),
 			string(fe.Type),
 			fe.Note,
+			derefString(fe.TransactionCode),
 			derefString(fe.Staff),
 			derefString(fe.Service),
 		}
@@ -196,12 +199,13 @@ func exportFinanceXLSX(items []domain.FinanceEntry) ([]byte, error) {
 	_ = f.SetColWidth(sheet, "G", "G", 28)
 	_ = f.SetColWidth(sheet, "H", "H", 18)
 	_ = f.SetColWidth(sheet, "I", "I", 18)
+	_ = f.SetColWidth(sheet, "J", "J", 18)
 
 	style, _ := f.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true},
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#1F2937"}, Pattern: 1},
 	})
-	_ = f.SetCellStyle(sheet, "A1", "I1", style)
+	_ = f.SetCellStyle(sheet, "A1", "J1", style)
 
 	buf, err := f.WriteToBuffer()
 	if err != nil {
@@ -225,6 +229,7 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 		Date     string  `json:"date"`
 		Type     string  `json:"type"`
 		Note     string  `json:"note"`
+		TransactionCode *string `json:"transactionCode"`
 		Staff    *string `json:"staff"`
 		Service  *string `json:"service"`
 	}
@@ -249,6 +254,7 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 		Date:     dt,
 		Type:     domain.FinanceEntryType(req.Type),
 		Note:     req.Note,
+		TransactionCode: req.TransactionCode,
 		Staff:    req.Staff,
 		Service:  req.Service,
 	})
@@ -257,14 +263,15 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":       fe.ID,
-		"title":    fe.Title,
-		"amount":   fe.Amount.Amount,
-		"category": fe.Category,
-		"date":     fe.Date.Format("2006-01-02"),
-		"type":     string(fe.Type),
-		"note":     fe.Note,
-		"staff":    fe.Staff,
-		"service":  fe.Service,
+		"id":              fe.ID,
+		"title":           fe.Title,
+		"amount":          fe.Amount.Amount,
+		"category":        fe.Category,
+		"date":            fe.Date.Format("2006-01-02"),
+		"type":            string(fe.Type),
+		"note":            fe.Note,
+		"transactionCode": fe.TransactionCode,
+		"staff":           fe.Staff,
+		"service":         fe.Service,
 	})
 }

@@ -180,6 +180,8 @@ func (h TransactionHandler) listTransactions(w http.ResponseWriter, r *http.Requ
 			"amount":        t.Amount.Amount,
 			"paymentMethod": t.PaymentMethod,
 			"status":        string(t.Status),
+			"refundedAt":    t.RefundedAt,
+			"refundNote":    t.RefundNote,
 			"stylist":       t.Stylist,
 			"stylistId":     t.StylistID,
 			"items":         toOrderLines(t.Items),
@@ -192,12 +194,16 @@ func (h TransactionHandler) listTransactions(w http.ResponseWriter, r *http.Requ
 func toOrderLines(items []domain.TransactionItem) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
 	for _, it := range items {
-		out = append(out, map[string]any{
+		m := map[string]any{
 			"name":     it.Name,
 			"category": it.Category,
 			"price":    it.Price.Amount,
 			"qty":      it.Qty,
-		})
+		}
+		if it.ProductID != nil {
+			m["productId"] = *it.ProductID
+		}
+		out = append(out, m)
 	}
 	return out
 }
@@ -280,6 +286,8 @@ func (h TransactionHandler) getByCode(w http.ResponseWriter, r *http.Request) {
 		"amount":        t.Amount.Amount,
 		"paymentMethod": t.PaymentMethod,
 		"status":        string(t.Status),
+		"refundedAt":    t.RefundedAt,
+		"refundNote":    t.RefundNote,
 		"stylist":       t.Stylist,
 		"stylistId":     t.StylistID,
 		"items":         toOrderLines(t.Items),
@@ -343,6 +351,7 @@ func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
 				Date:     time.Now(),
 				Type:     domain.FinanceExpense,
 				Note:     req.Note,
+				TransactionCode: &code,
 			})
 			if h.Membership == nil {
 				return nil

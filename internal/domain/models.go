@@ -199,6 +199,7 @@ type FinanceEntry struct {
 	Date      time.Time
 	Type      FinanceEntryType
 	Note      string
+	TransactionCode *string
 	Staff     *string
 	Service   *string
 	CreatedAt time.Time
@@ -252,6 +253,9 @@ type Transaction struct {
 	PaymentIntentID  *string
 	PaymentReference *string
 	Status           TransactionStatus
+	RefundedAt       *time.Time
+	RefundedBy       *int64
+	RefundNote       string
 	Stylist          string
 	CustomerID       *int64
 	Customer         *TransactionCustomerSnapshot

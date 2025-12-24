@@ -19,7 +19,7 @@ func (r TransactionRepository) GetByCode(ctx context.Context, code string) (*dom
 	row := r.DB.Pool.QueryRow(ctx, `
 		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
-		       shift_id, operator_name, created_at, updated_at, deleted_at
+		       shift_id, operator_name, refunded_at, refunded_by, refund_note, created_at, updated_at, deleted_at
 		FROM transactions
 		WHERE deleted_at IS NULL AND code = $1
 		LIMIT 1
@@ -32,11 +32,14 @@ func (r TransactionRepository) GetByCode(ctx context.Context, code string) (*dom
 	var shiftID pgtype.Text
 	var opName pgtype.Text
 	var stylistID pgtype.Int8
+	var refundedAt pgtype.Timestamptz
+	var refundedBy pgtype.Int8
+	var refundNote pgtype.Text
 	var deletedAt pgtype.Timestamptz
 	if err := row.Scan(
 		&t.ID, &t.Code, &t.Date, &t.Time, &t.Amount.Amount, &t.PaymentMethod, &status, &t.Stylist, &stylistID,
 		&customerName, &customerPhone, &customerEmail, &customerAddress, &visits, &lastVisit,
-		&shiftID, &opName, &t.CreatedAt, &t.UpdatedAt, &deletedAt,
+		&shiftID, &opName, &refundedAt, &refundedBy, &refundNote, &t.CreatedAt, &t.UpdatedAt, &deletedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrNotFound
@@ -67,6 +70,17 @@ func (r TransactionRepository) GetByCode(ctx context.Context, code string) (*dom
 	}
 	if opName.Valid {
 		t.OperatorName = opName.String
+	}
+	if refundedAt.Valid {
+		rt := refundedAt.Time
+		t.RefundedAt = &rt
+	}
+	if refundedBy.Valid {
+		rb := refundedBy.Int64
+		t.RefundedBy = &rb
+	}
+	if refundNote.Valid {
+		t.RefundNote = refundNote.String
 	}
 	if deletedAt.Valid {
 		d := deletedAt.Time
@@ -212,7 +226,7 @@ func (r TransactionRepository) List(ctx context.Context, limit int) ([]domain.Tr
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
-		       shift_id, operator_name, created_at, updated_at
+		       shift_id, operator_name, refunded_at, refunded_by, refund_note, created_at, updated_at
 		FROM transactions
 		WHERE deleted_at IS NULL
 		ORDER BY transacted_date DESC, id DESC
@@ -234,10 +248,13 @@ func (r TransactionRepository) List(ctx context.Context, limit int) ([]domain.Tr
 		var shiftID pgtype.Text
 		var opName pgtype.Text
 		var stylistID pgtype.Int8
+		var refundedAt pgtype.Timestamptz
+		var refundedBy pgtype.Int8
+		var refundNote pgtype.Text
 		if err := rows.Scan(
 			&t.ID, &t.Code, &t.Date, &t.Time, &t.Amount.Amount, &t.PaymentMethod, &status, &t.Stylist, &stylistID,
 			&customerName, &customerPhone, &customerEmail, &customerAddress, &visits, &lastVisit,
-			&shiftID, &opName, &t.CreatedAt, &t.UpdatedAt,
+			&shiftID, &opName, &refundedAt, &refundedBy, &refundNote, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -258,6 +275,17 @@ func (r TransactionRepository) List(ctx context.Context, limit int) ([]domain.Tr
 		if lastVisit.Valid {
 			lv := lastVisit.String
 			t.Customer.LastVisit = &lv
+		}
+		if refundedAt.Valid {
+			rt := refundedAt.Time
+			t.RefundedAt = &rt
+		}
+		if refundedBy.Valid {
+			rb := refundedBy.Int64
+			t.RefundedBy = &rb
+		}
+		if refundNote.Valid {
+			t.RefundNote = refundNote.String
 		}
 		ids = append(ids, t.ID)
 		txs = append(txs, t)
@@ -304,7 +332,7 @@ func (r TransactionRepository) ListFiltered(ctx context.Context, startDate, endD
 	query := `
 		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
 		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
-		       shift_id, operator_name, created_at, updated_at
+		       shift_id, operator_name, refunded_at, refunded_by, refund_note, created_at, updated_at
 		FROM transactions
 		WHERE deleted_at IS NULL
 	`
@@ -336,10 +364,13 @@ func (r TransactionRepository) ListFiltered(ctx context.Context, startDate, endD
 		var shiftID pgtype.Text
 		var opName pgtype.Text
 		var stylistID pgtype.Int8
+		var refundedAt pgtype.Timestamptz
+		var refundedBy pgtype.Int8
+		var refundNote pgtype.Text
 		if err := rows.Scan(
 			&t.ID, &t.Code, &t.Date, &t.Time, &t.Amount.Amount, &t.PaymentMethod, &status, &t.Stylist, &stylistID,
 			&customerName, &customerPhone, &customerEmail, &customerAddress, &visits, &lastVisit,
-			&shiftID, &opName, &t.CreatedAt, &t.UpdatedAt,
+			&shiftID, &opName, &refundedAt, &refundedBy, &refundNote, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -360,6 +391,17 @@ func (r TransactionRepository) ListFiltered(ctx context.Context, startDate, endD
 		if lastVisit.Valid {
 			lv := lastVisit.String
 			t.Customer.LastVisit = &lv
+		}
+		if refundedAt.Valid {
+			rt := refundedAt.Time
+			t.RefundedAt = &rt
+		}
+		if refundedBy.Valid {
+			rb := refundedBy.Int64
+			t.RefundedBy = &rb
+		}
+		if refundNote.Valid {
+			t.RefundNote = refundNote.String
 		}
 		ids = append(ids, t.ID)
 		txs = append(txs, t)
