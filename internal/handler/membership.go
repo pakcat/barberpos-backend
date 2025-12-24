@@ -13,10 +13,14 @@ import (
 
 type MembershipHandler struct {
 	Service *service.MembershipService
+	Employees repository.EmployeeRepository
 }
 
-func (h MembershipHandler) RegisterRoutes(r chi.Router) {
+func (h MembershipHandler) RegisterStaffRoutes(r chi.Router) {
 	r.Get("/membership", h.state)
+}
+
+func (h MembershipHandler) RegisterManagerRoutes(r chi.Router) {
 	r.Put("/membership", h.updateState)
 	r.Get("/membership/topups", h.listTopups)
 	r.Post("/membership/topups", h.createTopup)
@@ -28,7 +32,12 @@ func (h MembershipHandler) state(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	s, err := h.Service.GetState(r.Context(), user.ID)
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s, err := h.Service.GetState(r.Context(), ownerID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -54,7 +63,12 @@ func (h MembershipHandler) updateState(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	s, err := h.Service.SetUsedQuota(r.Context(), user.ID, req.UsedQuota)
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s, err := h.Service.SetUsedQuota(r.Context(), ownerID, req.UsedQuota)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -73,7 +87,12 @@ func (h MembershipHandler) listTopups(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	items, err := h.Service.Repo.ListTopups(r.Context(), user.ID, 200)
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	items, err := h.Service.Repo.ListTopups(r.Context(), ownerID, 200)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -111,6 +130,11 @@ func (h MembershipHandler) createTopup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	ownerID, err := resolveOwnerID(r.Context(), *user, h.Employees)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	dt := time.Now()
 	if req.Date != "" {
 		if t, err := time.Parse(time.RFC3339, req.Date); err == nil {
@@ -118,7 +142,7 @@ func (h MembershipHandler) createTopup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	topup, err := h.Service.Repo.CreateTopup(r.Context(), repository.CreateTopupInput{
-		OwnerUserID: user.ID,
+		OwnerUserID: ownerID,
 		Amount:      req.Amount,
 		Manager:     req.Manager,
 		Note:        req.Note,

@@ -101,7 +101,7 @@ func main() {
 	settingsHandler := handler.SettingsHandler{Repo: settingsRepo}
 	qrisHandler := handler.QRISHandler{Settings: settingsRepo, Employees: employeeRepo}
 	financeHandler := handler.FinanceHandler{Repo: financeRepo}
-	membershipHandler := handler.MembershipHandler{Service: &membershipSvc}
+	membershipHandler := handler.MembershipHandler{Service: &membershipSvc, Employees: employeeRepo}
 	stockHandler := handler.StockHandler{Repo: stockRepo}
 	employeeHandler := handler.EmployeeHandler{Repo: employeeRepo}
 	fcmHandler := handler.FCMHandler{Repo: fcmRepo}
