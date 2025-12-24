@@ -61,6 +61,7 @@ func (h FinanceHandler) list(w http.ResponseWriter, r *http.Request) {
 			"date":            fe.Date.Format("2006-01-02"),
 			"type":            string(fe.Type),
 			"note":            fe.Note,
+			"transactionId":   fe.TransactionID,
 			"transactionCode": fe.TransactionCode,
 			"staff":           fe.Staff,
 			"service":         fe.Service,
@@ -136,8 +137,12 @@ func (h FinanceHandler) export(w http.ResponseWriter, r *http.Request) {
 func exportFinanceCSV(items []domain.FinanceEntry) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	w := csv.NewWriter(buf)
-	_ = w.Write([]string{"id", "title", "amount", "category", "date", "type", "note", "transaction_code", "staff", "service"})
+	_ = w.Write([]string{"id", "title", "amount", "category", "date", "type", "note", "transaction_id", "transaction_code", "staff", "service"})
 	for _, fe := range items {
+		var txID string
+		if fe.TransactionID != nil {
+			txID = strconv.FormatInt(*fe.TransactionID, 10)
+		}
 		_ = w.Write([]string{
 			strconv.FormatInt(fe.ID, 10),
 			fe.Title,
@@ -146,6 +151,7 @@ func exportFinanceCSV(items []domain.FinanceEntry) ([]byte, error) {
 			fe.Date.Format("2006-01-02"),
 			string(fe.Type),
 			fe.Note,
+			txID,
 			derefString(fe.TransactionCode),
 			derefString(fe.Staff),
 			derefString(fe.Service),
@@ -165,13 +171,19 @@ func exportFinanceXLSX(items []domain.FinanceEntry) ([]byte, error) {
 	f.DeleteSheet("Sheet1")
 	f.SetActiveSheet(index)
 
-	header := []string{"ID", "Title", "Amount", "Category", "Date", "Type", "Note", "Transaction Code", "Staff", "Service"}
+	header := []string{"ID", "Title", "Amount", "Category", "Date", "Type", "Note", "Transaction ID", "Transaction Code", "Staff", "Service"}
 	for c, v := range header {
 		cell, _ := excelize.CoordinatesToCellName(c+1, 1)
 		_ = f.SetCellValue(sheet, cell, v)
 	}
 	for r, fe := range items {
 		row := r + 2
+		var txID any
+		if fe.TransactionID != nil {
+			txID = *fe.TransactionID
+		} else {
+			txID = ""
+		}
 		values := []any{
 			fe.ID,
 			fe.Title,
@@ -180,6 +192,7 @@ func exportFinanceXLSX(items []domain.FinanceEntry) ([]byte, error) {
 			fe.Date.Format("2006-01-02"),
 			string(fe.Type),
 			fe.Note,
+			txID,
 			derefString(fe.TransactionCode),
 			derefString(fe.Staff),
 			derefString(fe.Service),
@@ -197,15 +210,16 @@ func exportFinanceXLSX(items []domain.FinanceEntry) ([]byte, error) {
 	_ = f.SetColWidth(sheet, "E", "E", 12)
 	_ = f.SetColWidth(sheet, "F", "F", 10)
 	_ = f.SetColWidth(sheet, "G", "G", 28)
-	_ = f.SetColWidth(sheet, "H", "H", 18)
+	_ = f.SetColWidth(sheet, "H", "H", 14)
 	_ = f.SetColWidth(sheet, "I", "I", 18)
 	_ = f.SetColWidth(sheet, "J", "J", 18)
+	_ = f.SetColWidth(sheet, "K", "K", 18)
 
 	style, _ := f.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true},
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#1F2937"}, Pattern: 1},
 	})
-	_ = f.SetCellStyle(sheet, "A1", "J1", style)
+	_ = f.SetCellStyle(sheet, "A1", "K1", style)
 
 	buf, err := f.WriteToBuffer()
 	if err != nil {
@@ -229,6 +243,7 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 		Date     string  `json:"date"`
 		Type     string  `json:"type"`
 		Note     string  `json:"note"`
+		TransactionID   *int64  `json:"transactionId"`
 		TransactionCode *string `json:"transactionCode"`
 		Staff    *string `json:"staff"`
 		Service  *string `json:"service"`
@@ -254,6 +269,7 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 		Date:     dt,
 		Type:     domain.FinanceEntryType(req.Type),
 		Note:     req.Note,
+		TransactionID:   req.TransactionID,
 		TransactionCode: req.TransactionCode,
 		Staff:    req.Staff,
 		Service:  req.Service,
@@ -270,6 +286,7 @@ func (h FinanceHandler) create(w http.ResponseWriter, r *http.Request) {
 		"date":            fe.Date.Format("2006-01-02"),
 		"type":            string(fe.Type),
 		"note":            fe.Note,
+		"transactionId":   fe.TransactionID,
 		"transactionCode": fe.TransactionCode,
 		"staff":           fe.Staff,
 		"service":         fe.Service,

@@ -357,6 +357,7 @@ func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
 				Date:     time.Now(),
 				Type:     domain.FinanceExpense,
 				Note:     req.Note,
+				TransactionID:   &t.ID,
 				TransactionCode: &code,
 			})
 			if h.Membership == nil {
@@ -374,9 +375,7 @@ func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h TransactionHandler) markPaid(w http.ResponseWriter, r *http.Request) {
@@ -397,7 +396,8 @@ func (h TransactionHandler) markPaid(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
-	if err := h.Repo.MarkPaidByCodeWithTx(r.Context(), tx, code); err != nil {
+	transactionID, err := h.Repo.MarkPaidByCodeWithTx(r.Context(), tx, code)
+	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "transaction not found")
 			return
@@ -407,13 +407,11 @@ func (h TransactionHandler) markPaid(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Best-effort: remove refund finance entry when undoing refund.
-	_ = h.Finance.DeleteRefundByTransactionCodeWithTx(r.Context(), tx, code)
+	_ = h.Finance.DeleteRefundByTransactionIDWithTx(r.Context(), tx, transactionID)
 
 	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

@@ -203,6 +203,7 @@ type FinanceEntry struct {
 	Date      time.Time
 	Type      FinanceEntryType
 	Note      string
+	TransactionID *int64
 	TransactionCode *string
 	Staff     *string
 	Service   *string

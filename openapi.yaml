@@ -614,7 +614,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        nullable: true
+                        type: object
+                        properties:
+                          ok: { type: boolean }
   /transactions/{code}/mark-paid:
     post:
       summary: Mark a transaction as paid (undo refund)
@@ -637,7 +639,9 @@ paths:
                   - type: object
                     properties:
                       data:
-                        nullable: true
+                        type: object
+                        properties:
+                          ok: { type: boolean }
   /payments/qris:
     post:
       summary: Create QRIS payment intent (dummy)
@@ -1736,6 +1740,7 @@ components:
         date: { type: string }
         type: { type: string, enum: [revenue, expense] }
         note: { type: string }
+        transactionId: { type: integer, format: int64, nullable: true }
         transactionCode: { type: string, nullable: true }
         staff: { type: string }
         service: { type: string }

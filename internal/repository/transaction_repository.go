@@ -575,8 +575,9 @@ func (r TransactionRepository) MarkPaidByCode(ctx context.Context, code string) 
 	return nil
 }
 
-func (r TransactionRepository) MarkPaidByCodeWithTx(ctx context.Context, tx pgx.Tx, code string) error {
-	ct, err := tx.Exec(ctx, `
+func (r TransactionRepository) MarkPaidByCodeWithTx(ctx context.Context, tx pgx.Tx, code string) (int64, error) {
+	var id int64
+	err := tx.QueryRow(ctx, `
 		UPDATE transactions
 		SET status='paid',
 		    refunded_at=NULL,
@@ -585,14 +586,15 @@ func (r TransactionRepository) MarkPaidByCodeWithTx(ctx context.Context, tx pgx.
 		    deleted_at=NULL,
 		    updated_at=now()
 		WHERE code=$1
-	`, code)
+		RETURNING id
+	`, code).Scan(&id)
 	if err != nil {
-		return err
+		if err == pgx.ErrNoRows {
+			return 0, ErrNotFound
+		}
+		return 0, err
 	}
-	if ct.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return id, nil
 }
 
 type RefundTransactionParams struct {
