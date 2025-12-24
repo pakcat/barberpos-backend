@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"barberpos-backend/internal/db"
 	"barberpos-backend/internal/domain"
@@ -99,4 +100,53 @@ func (r SettingsRepository) Save(ctx context.Context, ownerUserID int64, s domai
 		return nil, err
 	}
 	return &s, nil
+}
+
+func (r SettingsRepository) HasQrisImage(ctx context.Context, ownerUserID int64) (bool, error) {
+	var ok bool
+	err := r.DB.Pool.QueryRow(ctx, `
+		SELECT qris_image IS NOT NULL
+		FROM settings
+		WHERE owner_user_id=$1
+	`, ownerUserID).Scan(&ok)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return ok, nil
+}
+
+func (r SettingsRepository) SetQrisImage(ctx context.Context, ownerUserID int64, bytes []byte, mime string) error {
+	_, err := r.DB.Pool.Exec(ctx, `
+		UPDATE settings
+		SET qris_image=$2, qris_image_mime=$3, qris_image_updated_at=now(), updated_at=now()
+		WHERE owner_user_id=$1
+	`, ownerUserID, bytes, mime)
+	return err
+}
+
+func (r SettingsRepository) ClearQrisImage(ctx context.Context, ownerUserID int64) error {
+	_, err := r.DB.Pool.Exec(ctx, `
+		UPDATE settings
+		SET qris_image=NULL, qris_image_mime='', qris_image_updated_at=NULL, updated_at=now()
+		WHERE owner_user_id=$1
+	`, ownerUserID)
+	return err
+}
+
+func (r SettingsRepository) GetQrisImage(ctx context.Context, ownerUserID int64) (bytes []byte, mime string, updatedAt *time.Time, err error) {
+	err = r.DB.Pool.QueryRow(ctx, `
+		SELECT qris_image, qris_image_mime, qris_image_updated_at
+		FROM settings
+		WHERE owner_user_id=$1
+	`, ownerUserID).Scan(&bytes, &mime, &updatedAt)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	if len(bytes) == 0 {
+		return nil, "", updatedAt, pgx.ErrNoRows
+	}
+	return bytes, mime, updatedAt, nil
 }

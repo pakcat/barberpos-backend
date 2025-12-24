@@ -26,6 +26,7 @@ func NewRouter(cfg config.Config,
 	customers handler.CustomerHandler,
 	regions handler.RegionHandler,
 	settings handler.SettingsHandler,
+	qris handler.QRISHandler,
 	finance handler.FinanceHandler,
 	membership handler.MembershipHandler,
 	tx handler.TransactionHandler,
@@ -64,6 +65,10 @@ func NewRouter(cfg config.Config,
 	docs.RegisterRoutes(r)
 	r.Method("GET", "/metrics", promhttp.Handler())
 
+	// Public uploads (local storage). Keep it outside auth so Image.network can load without headers.
+	uploadsFS := http.FileServer(http.Dir(cfg.UploadDir))
+	r.Mount("/uploads/", http.StripPrefix("/uploads/", uploadsFS))
+
 	r.Group(func(pr chi.Router) {
 		pr.Use(AuthMiddleware(cfg.JWTSecret))
 		auth.RegisterProtectedRoutes(pr)
@@ -78,6 +83,7 @@ func NewRouter(cfg config.Config,
 			payments.RegisterRoutes(sr)
 			closing.RegisterRoutes(sr)
 			logs.RegisterRoutes(sr)
+			qris.RegisterStaffRoutes(sr)
 			fcm.RegisterRoutes(sr)
 			notifications.RegisterRoutes(sr)
 		})
@@ -87,6 +93,7 @@ func NewRouter(cfg config.Config,
 			dashboard.RegisterRoutes(mr)
 			productsAdmin.RegisterRoutes(mr)
 			settings.RegisterRoutes(mr)
+			qris.RegisterManagerRoutes(mr)
 			finance.RegisterRoutes(mr)
 			membership.RegisterRoutes(mr)
 			stocks.RegisterRoutes(mr)

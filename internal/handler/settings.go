@@ -30,7 +30,8 @@ func (h SettingsHandler) get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, toSettingsResponse(s))
+	hasQris, _ := h.Repo.HasQrisImage(r.Context(), user.ID)
+	writeJSON(w, http.StatusOK, toSettingsResponse(s, hasQris))
 }
 
 func (h SettingsHandler) save(w http.ResponseWriter, r *http.Request) {
@@ -57,10 +58,11 @@ func (h SettingsHandler) save(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, toSettingsResponse(s))
+	hasQris, _ := h.Repo.HasQrisImage(r.Context(), user.ID)
+	writeJSON(w, http.StatusOK, toSettingsResponse(s, hasQris))
 }
 
-func toSettingsResponse(s *domain.Settings) map[string]any {
+func toSettingsResponse(s *domain.Settings, hasQris bool) map[string]any {
 	return map[string]any{
 		"businessName":         s.BusinessName,
 		"businessAddress":      s.BusinessAddress,
@@ -80,5 +82,6 @@ func toSettingsResponse(s *domain.Settings) map[string]any {
 		"autoBackup":           s.AutoBackup,
 		"cashierPin":           s.CashierPin,
 		"currencyCode":         s.CurrencyCode,
+		"hasQrisImage":         hasQris,
 	}
 }

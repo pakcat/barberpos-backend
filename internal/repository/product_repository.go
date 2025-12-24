@@ -116,3 +116,25 @@ func (r ProductRepository) Delete(ctx context.Context, ownerUserID int64, id int
 	_, err := r.DB.Pool.Exec(ctx, `UPDATE products SET deleted_at = now() WHERE id=$1 AND owner_user_id=$2`, id, ownerUserID)
 	return err
 }
+
+func (r ProductRepository) UpdateImage(ctx context.Context, ownerUserID int64, id int64, image string) error {
+	ct, err := r.DB.Pool.Exec(ctx, `
+		UPDATE products
+		SET image=$1, updated_at=now()
+		WHERE id=$2 AND owner_user_id=$3 AND deleted_at IS NULL
+	`, image, id, ownerUserID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	// Keep stocks table aligned (if exists) so stock UI shows latest image.
+	_, _ = r.DB.Pool.Exec(ctx, `
+		UPDATE stocks
+		SET image=$1, updated_at=now()
+		WHERE product_id=$2 AND deleted_at IS NULL
+	`, image, id)
+	return nil
+}

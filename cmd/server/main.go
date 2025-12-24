@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -26,6 +27,11 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Error("failed to load config", "err", err)
+		os.Exit(1)
+	}
+
+	if err := os.MkdirAll(filepath.Clean(cfg.UploadDir), 0755); err != nil {
+		logger.Error("upload dir init failed", "err", err)
 		os.Exit(1)
 	}
 
@@ -88,11 +94,12 @@ func main() {
 	healthHandler := handler.HealthHandler{DB: pg}
 	authHandler := handler.AuthHandler{Service: &authSvc}
 	productHandler := handler.ProductHandler{Repo: productRepo, Employees: employeeRepo, Currency: cfg.DefaultCurrency}
-	productAdminHandler := handler.ProductAdminHandler{Repo: productRepo}
+	productAdminHandler := handler.ProductAdminHandler{Repo: productRepo, UploadDir: cfg.UploadDir}
 	categoryHandler := handler.CategoryHandler{Repo: categoryRepo, Employees: employeeRepo}
 	customerHandler := handler.CustomerHandler{Repo: customerRepo, Employees: employeeRepo}
 	regionHandler := handler.RegionHandler{Repo: regionRepo}
 	settingsHandler := handler.SettingsHandler{Repo: settingsRepo}
+	qrisHandler := handler.QRISHandler{Settings: settingsRepo, Employees: employeeRepo}
 	financeHandler := handler.FinanceHandler{Repo: financeRepo}
 	membershipHandler := handler.MembershipHandler{Service: &membershipSvc}
 	stockHandler := handler.StockHandler{Repo: stockRepo}
@@ -124,7 +131,7 @@ func main() {
 		logger.Warn("bootstrap stocks sync failed", "err", err)
 	}
 
-	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, regionHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, activityLogHandler, paymentHandler, fcmHandler, notificationHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
+	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, regionHandler, settingsHandler, qrisHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, activityLogHandler, paymentHandler, fcmHandler, notificationHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
 
 	if err := server.Start(ctx, cfg, router, logger); err != nil {
 		logger.Error("server error", "err", err)

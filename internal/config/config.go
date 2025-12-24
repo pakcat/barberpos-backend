@@ -16,6 +16,8 @@ type Config struct {
 	DatabaseURL       string
 	DefaultCurrency   string
 	JWTSecret         string
+	PublicBaseURL     string
+	UploadDir         string
 	AccessTokenTTL    time.Duration
 	RefreshTokenTTL   time.Duration
 	GoogleClientID    string
@@ -37,6 +39,8 @@ func Load() (Config, error) {
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		DefaultCurrency:   getEnv("CURRENCY_CODE", "IDR"),
 		JWTSecret:         os.Getenv("JWT_SECRET"),
+		PublicBaseURL:     getEnv("PUBLIC_BASE_URL", ""),
+		UploadDir:         getEnv("UPLOAD_DIR", "uploads"),
 		AccessTokenTTL:    getDuration("ACCESS_TOKEN_TTL", 30*24*time.Hour),
 		RefreshTokenTTL:   getDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		GoogleClientID:    os.Getenv("GOOGLE_CLIENT_ID"),
