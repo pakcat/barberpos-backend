@@ -8,6 +8,7 @@ import (
 	"barberpos-backend/internal/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type MembershipRepository struct {
@@ -22,33 +23,35 @@ type pgxQuerier interface {
 }
 
 type SaveMembershipStateParams struct {
+	OwnerUserID    int64
 	UsedQuota       int
 	FreeUsed        int
 	FreePeriodStart time.Time
 	TopupBalance    int
 }
 
-func (r MembershipRepository) GetState(ctx context.Context) (*domain.MembershipState, error) {
-	return r.getStateWith(ctx, r.DB.Pool)
+func (r MembershipRepository) GetState(ctx context.Context, ownerUserID int64) (*domain.MembershipState, error) {
+	return r.getStateWith(ctx, r.DB.Pool, ownerUserID)
 }
 
 func (r MembershipRepository) SaveState(ctx context.Context, p SaveMembershipStateParams) (*domain.MembershipState, error) {
 	return r.saveStateWith(ctx, r.DB.Pool, p)
 }
 
-func (r MembershipRepository) SumTopups(ctx context.Context) (int64, error) {
-	return r.sumTopupsWith(ctx, r.DB.Pool)
+func (r MembershipRepository) SumTopups(ctx context.Context, ownerUserID int64) (int64, error) {
+	return r.sumTopupsWith(ctx, r.DB.Pool, ownerUserID)
 }
 
-func (r MembershipRepository) IncrementTopupBalance(ctx context.Context, delta int64) (*domain.MembershipState, error) {
-	return r.incrementTopupBalanceWith(ctx, r.DB.Pool, delta)
+func (r MembershipRepository) IncrementTopupBalance(ctx context.Context, ownerUserID int64, delta int64) (*domain.MembershipState, error) {
+	return r.incrementTopupBalanceWith(ctx, r.DB.Pool, ownerUserID, delta)
 }
 
 type CreateTopupInput struct {
-	Amount  int64
-	Manager string
-	Note    string
-	Date    time.Time
+	OwnerUserID int64
+	Amount      int64
+	Manager     string
+	Note        string
+	Date        time.Time
 }
 
 func (r MembershipRepository) CreateTopup(ctx context.Context, in CreateTopupInput) (*domain.MembershipTopup, error) {
@@ -59,15 +62,20 @@ func (r MembershipRepository) CreateTopup(ctx context.Context, in CreateTopupInp
 	defer tx.Rollback(ctx)
 
 	var t domain.MembershipTopup
-	if err := tx.QueryRow(ctx, `
-		INSERT INTO membership_topups (amount, manager, note, topup_date, created_at)
-		VALUES ($1,$2,$3,$4, now())
-		RETURNING id, amount, manager, note, topup_date, created_at
-	`, in.Amount, in.Manager, in.Note, in.Date).Scan(&t.ID, &t.Amount.Amount, &t.Manager, &t.Note, &t.Date, &t.CreatedAt); err != nil {
+	row := tx.QueryRow(ctx, `
+		INSERT INTO membership_topups (owner_user_id, amount, manager, note, topup_date, created_at)
+		VALUES ($1,$2,$3,$4,$5, now())
+		RETURNING id, owner_user_id, amount, manager, note, topup_date, created_at
+	`, in.OwnerUserID, in.Amount, in.Manager, in.Note, in.Date)
+	var ownerID pgtype.Int8
+	if err := row.Scan(&t.ID, &ownerID, &t.Amount.Amount, &t.Manager, &t.Note, &t.Date, &t.CreatedAt); err != nil {
 		return nil, err
 	}
+	if ownerID.Valid {
+		t.OwnerID = &ownerID.Int64
+	}
 
-	if _, err := r.incrementTopupBalanceWith(ctx, tx, in.Amount); err != nil {
+	if _, err := r.incrementTopupBalanceWith(ctx, tx, in.OwnerUserID, in.Amount); err != nil {
 		return nil, err
 	}
 
@@ -77,14 +85,14 @@ func (r MembershipRepository) CreateTopup(ctx context.Context, in CreateTopupInp
 	return &t, nil
 }
 
-func (r MembershipRepository) ListTopups(ctx context.Context, limit int) ([]domain.MembershipTopup, error) {
+func (r MembershipRepository) ListTopups(ctx context.Context, ownerUserID int64, limit int) ([]domain.MembershipTopup, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
-		SELECT id, amount, manager, note, topup_date, created_at
+		SELECT id, owner_user_id, amount, manager, note, topup_date, created_at
 		FROM membership_topups
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND owner_user_id = $1
 		ORDER BY topup_date DESC, id DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, ownerUserID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +100,12 @@ func (r MembershipRepository) ListTopups(ctx context.Context, limit int) ([]doma
 	var items []domain.MembershipTopup
 	for rows.Next() {
 		var t domain.MembershipTopup
-		if err := rows.Scan(&t.ID, &t.Amount.Amount, &t.Manager, &t.Note, &t.Date, &t.CreatedAt); err != nil {
+		var ownerID pgtype.Int8
+		if err := rows.Scan(&t.ID, &ownerID, &t.Amount.Amount, &t.Manager, &t.Note, &t.Date, &t.CreatedAt); err != nil {
 			return nil, err
+		}
+		if ownerID.Valid {
+			t.OwnerID = &ownerID.Int64
 		}
 		items = append(items, t)
 	}
@@ -101,34 +113,36 @@ func (r MembershipRepository) ListTopups(ctx context.Context, limit int) ([]doma
 }
 
 // Transaction-scoped helpers
-func (r MembershipRepository) GetStateWithTx(ctx context.Context, tx pgx.Tx) (*domain.MembershipState, error) {
-	return r.getStateWith(ctx, tx)
+func (r MembershipRepository) GetStateWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64) (*domain.MembershipState, error) {
+	return r.getStateWith(ctx, tx, ownerUserID)
 }
 
 func (r MembershipRepository) SaveStateWithTx(ctx context.Context, tx pgx.Tx, p SaveMembershipStateParams) (*domain.MembershipState, error) {
 	return r.saveStateWith(ctx, tx, p)
 }
 
-func (r MembershipRepository) SumTopupsWithTx(ctx context.Context, tx pgx.Tx) (int64, error) {
-	return r.sumTopupsWith(ctx, tx)
+func (r MembershipRepository) SumTopupsWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64) (int64, error) {
+	return r.sumTopupsWith(ctx, tx, ownerUserID)
 }
 
-func (r MembershipRepository) IncrementTopupBalanceWithTx(ctx context.Context, tx pgx.Tx, delta int64) (*domain.MembershipState, error) {
-	return r.incrementTopupBalanceWith(ctx, tx, delta)
+func (r MembershipRepository) IncrementTopupBalanceWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, delta int64) (*domain.MembershipState, error) {
+	return r.incrementTopupBalanceWith(ctx, tx, ownerUserID, delta)
 }
 
-func (r MembershipRepository) getStateWith(ctx context.Context, q pgxQuerier) (*domain.MembershipState, error) {
+func (r MembershipRepository) getStateWith(ctx context.Context, q pgxQuerier, ownerUserID int64) (*domain.MembershipState, error) {
 	var state domain.MembershipState
-	err := q.QueryRow(ctx, `
-		SELECT used_quota, free_used, free_period_start, topup_balance, updated_at
+	row := q.QueryRow(ctx, `
+		SELECT owner_user_id, used_quota, free_used, free_period_start, topup_balance, updated_at
 		FROM membership_state
-		WHERE id=1
-	`).Scan(&state.UsedQuota, &state.FreeUsed, &state.FreeStart, &state.TopupBal, &state.UpdatedAt)
-	if err != nil {
+		WHERE owner_user_id = $1
+	`, ownerUserID)
+	var ownerID pgtype.Int8
+	if err := row.Scan(&ownerID, &state.UsedQuota, &state.FreeUsed, &state.FreeStart, &state.TopupBal, &state.UpdatedAt); err != nil {
 		if err == pgx.ErrNoRows {
 			now := time.Now()
 			start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 			return r.saveStateWith(ctx, q, SaveMembershipStateParams{
+				OwnerUserID:    ownerUserID,
 				UsedQuota:       0,
 				FreeUsed:        0,
 				FreePeriodStart: start,
@@ -137,53 +151,65 @@ func (r MembershipRepository) getStateWith(ctx context.Context, q pgxQuerier) (*
 		}
 		return nil, err
 	}
+	if ownerID.Valid {
+		state.OwnerID = &ownerID.Int64
+	}
 	return &state, nil
 }
 
 func (r MembershipRepository) saveStateWith(ctx context.Context, q pgxQuerier, p SaveMembershipStateParams) (*domain.MembershipState, error) {
 	var state domain.MembershipState
-	err := q.QueryRow(ctx, `
-		INSERT INTO membership_state (id, used_quota, free_used, free_period_start, topup_balance, updated_at)
-		VALUES (1, $1, $2, $3, $4, now())
-		ON CONFLICT (id) DO UPDATE SET
+	row := q.QueryRow(ctx, `
+		INSERT INTO membership_state (owner_user_id, used_quota, free_used, free_period_start, topup_balance, updated_at)
+		VALUES ($1, $2, $3, $4, $5, now())
+		ON CONFLICT (owner_user_id) DO UPDATE SET
 			used_quota=EXCLUDED.used_quota,
 			free_used=EXCLUDED.free_used,
 			free_period_start=EXCLUDED.free_period_start,
 			topup_balance=EXCLUDED.topup_balance,
 			updated_at=now()
-		RETURNING used_quota, free_used, free_period_start, topup_balance, updated_at
-	`, p.UsedQuota, p.FreeUsed, p.FreePeriodStart, p.TopupBalance).
-		Scan(&state.UsedQuota, &state.FreeUsed, &state.FreeStart, &state.TopupBal, &state.UpdatedAt)
+		RETURNING owner_user_id, used_quota, free_used, free_period_start, topup_balance, updated_at
+	`, p.OwnerUserID, p.UsedQuota, p.FreeUsed, p.FreePeriodStart, p.TopupBalance)
+	var ownerID pgtype.Int8
+	err := row.Scan(&ownerID, &state.UsedQuota, &state.FreeUsed, &state.FreeStart, &state.TopupBal, &state.UpdatedAt)
 	if err != nil {
 		return nil, err
+	}
+	if ownerID.Valid {
+		state.OwnerID = &ownerID.Int64
 	}
 	return &state, nil
 }
 
-func (r MembershipRepository) sumTopupsWith(ctx context.Context, q pgxQuerier) (int64, error) {
+func (r MembershipRepository) sumTopupsWith(ctx context.Context, q pgxQuerier, ownerUserID int64) (int64, error) {
 	var total int64
 	if err := q.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount), 0)
 		FROM membership_topups
-		WHERE deleted_at IS NULL
-	`).Scan(&total); err != nil {
+		WHERE deleted_at IS NULL AND owner_user_id = $1
+	`, ownerUserID).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil
 }
 
-func (r MembershipRepository) incrementTopupBalanceWith(ctx context.Context, q pgxQuerier, delta int64) (*domain.MembershipState, error) {
+func (r MembershipRepository) incrementTopupBalanceWith(ctx context.Context, q pgxQuerier, ownerUserID int64, delta int64) (*domain.MembershipState, error) {
 	var state domain.MembershipState
-	err := q.QueryRow(ctx, `
-		INSERT INTO membership_state (id, topup_balance, used_quota, free_used, free_period_start, updated_at)
-		VALUES (1, $1, 0, 0, date_trunc('month', now())::date, now())
-		ON CONFLICT (id) DO UPDATE SET
+	row := q.QueryRow(ctx, `
+		INSERT INTO membership_state (owner_user_id, topup_balance, used_quota, free_used, free_period_start, updated_at)
+		VALUES ($1, $2, 0, 0, date_trunc('month', now())::date, now())
+		ON CONFLICT (owner_user_id) DO UPDATE SET
 			topup_balance = membership_state.topup_balance + EXCLUDED.topup_balance,
 			updated_at = now()
-		RETURNING used_quota, free_used, free_period_start, topup_balance, updated_at
-	`, delta).Scan(&state.UsedQuota, &state.FreeUsed, &state.FreeStart, &state.TopupBal, &state.UpdatedAt)
+		RETURNING owner_user_id, used_quota, free_used, free_period_start, topup_balance, updated_at
+	`, ownerUserID, delta)
+	var ownerID pgtype.Int8
+	err := row.Scan(&ownerID, &state.UsedQuota, &state.FreeUsed, &state.FreeStart, &state.TopupBal, &state.UpdatedAt)
 	if err != nil {
 		return nil, err
+	}
+	if ownerID.Valid {
+		state.OwnerID = &ownerID.Int64
 	}
 	return &state, nil
 }

@@ -67,6 +67,7 @@ func main() {
 	stockRepo := repository.StockRepository{DB: pg}
 	employeeRepo := repository.EmployeeRepository{DB: pg}
 	fcmRepo := repository.FCMRepository{DB: pg}
+	notificationRepo := repository.NotificationRepository{DB: pg}
 	txRepo := repository.TransactionRepository{DB: pg}
 	attendanceRepo := repository.AttendanceRepository{DB: pg}
 	dashboardRepo := repository.DashboardRepository{DB: pg}
@@ -96,7 +97,8 @@ func main() {
 	stockHandler := handler.StockHandler{Repo: stockRepo}
 	employeeHandler := handler.EmployeeHandler{Repo: employeeRepo}
 	fcmHandler := handler.FCMHandler{Repo: fcmRepo}
-	transactionHandler := handler.TransactionHandler{Repo: txRepo, Currency: cfg.DefaultCurrency, Membership: &membershipSvc}
+	notificationHandler := handler.NotificationHandler{Repo: notificationRepo}
+	transactionHandler := handler.TransactionHandler{Repo: txRepo, Currency: cfg.DefaultCurrency, Membership: &membershipSvc, Employees: employeeRepo}
 	attendanceHandler := handler.AttendanceHandler{Repo: attendanceRepo}
 	dashboardHandler := handler.DashboardHandler{Repo: dashboardRepo}
 	closingHandler := handler.ClosingHandler{Repo: closingRepo}
@@ -104,7 +106,7 @@ func main() {
 	homeHandler := handler.HomeHandler{}
 	docsHandler := handler.DocsHandler{OpenAPIPath: "openapi.yaml"}
 
-	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, regionHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, paymentHandler, fcmHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
+	router := server.NewRouter(cfg, logger, healthHandler, authHandler, productHandler, productAdminHandler, categoryHandler, customerHandler, regionHandler, settingsHandler, financeHandler, membershipHandler, transactionHandler, attendanceHandler, dashboardHandler, closingHandler, paymentHandler, fcmHandler, notificationHandler, stockHandler, employeeHandler, docsHandler, homeHandler)
 
 	if err := server.Start(ctx, cfg, router, logger); err != nil {
 		logger.Error("server error", "err", err)

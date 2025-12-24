@@ -93,6 +93,9 @@ func (s AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResul
 	})
 	if err != nil {
 		if repository.IsDuplicate(err) {
+			if info, infoErr := s.Users.GetEmailAccountInfo(ctx, in.Email); infoErr == nil && info.IsGoogle {
+				return nil, fmt.Errorf("email already used, please login with Google")
+			}
 			return nil, fmt.Errorf("email already used")
 		}
 		return nil, err
@@ -256,6 +259,27 @@ func (s AuthService) ResetPassword(ctx context.Context, token, newPassword strin
 	// If you want to update a user, extend payload to include email and set the password there.
 	_ = newPassword
 	return nil
+}
+
+func (s AuthService) ChangePassword(ctx context.Context, userID int64, current, next string) error {
+	if next == "" {
+		return errors.New("new password is required")
+	}
+	user, err := s.Users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user.PasswordHash == nil {
+		return ErrInvalidCredentials
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(current)); err != nil {
+		return ErrInvalidCredentials
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(next), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	return s.Users.UpdatePassword(ctx, userID, string(hash))
 }
 
 func (s AuthService) issueTokens(user *domain.User) (*AuthResult, error) {

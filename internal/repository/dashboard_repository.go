@@ -15,6 +15,9 @@ type DashboardSummary struct {
 	TotalRevenue      int64
 	TotalTransactions int64
 	TodayRevenue      int64
+	TodayTransactions int64
+	TodayCustomers    int64
+	ServicesSold      int64
 }
 
 type DashboardItem struct {
@@ -32,12 +35,24 @@ func (r DashboardRepository) Summary(ctx context.Context) (DashboardSummary, err
 	var s DashboardSummary
 	err := r.DB.Pool.QueryRow(ctx, `
 		SELECT
-			COALESCE(SUM(amount),0) AS total_revenue,
-			COUNT(*) AS total_tx,
-			COALESCE(SUM(amount) FILTER (WHERE transacted_date = CURRENT_DATE),0) AS today_revenue
+			COALESCE(SUM(amount) FILTER (WHERE status = 'paid'),0) AS total_revenue,
+			COUNT(*) FILTER (WHERE status = 'paid') AS total_tx,
+			COALESCE(SUM(amount) FILTER (WHERE status = 'paid' AND transacted_date = CURRENT_DATE),0) AS today_revenue,
+			COUNT(*) FILTER (WHERE status = 'paid' AND transacted_date = CURRENT_DATE) AS today_tx,
+			COALESCE((
+				SELECT COUNT(DISTINCT NULLIF(customer_name, ''))
+				FROM transactions
+				WHERE deleted_at IS NULL AND status = 'paid' AND transacted_date = CURRENT_DATE
+			),0) AS today_customers,
+			COALESCE((
+				SELECT SUM(ti.qty)
+				FROM transaction_items ti
+				JOIN transactions t ON t.id = ti.transaction_id
+				WHERE t.deleted_at IS NULL AND t.status = 'paid' AND t.transacted_date = CURRENT_DATE
+			),0) AS services_sold
 		FROM transactions
-		WHERE deleted_at IS NULL AND status = 'paid'
-	`).Scan(&s.TotalRevenue, &s.TotalTransactions, &s.TodayRevenue)
+		WHERE deleted_at IS NULL
+	`).Scan(&s.TotalRevenue, &s.TotalTransactions, &s.TodayRevenue, &s.TodayTransactions, &s.TodayCustomers, &s.ServicesSold)
 	return s, err
 }
 

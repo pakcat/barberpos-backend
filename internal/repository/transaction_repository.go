@@ -216,3 +216,105 @@ func (r TransactionRepository) List(ctx context.Context, limit int) ([]domain.Tr
 
 	return txs, nil
 }
+
+func (r TransactionRepository) ListFiltered(ctx context.Context, startDate, endDate *time.Time) ([]domain.Transaction, error) {
+	query := `
+		SELECT id, code, transacted_date, transacted_time, amount, payment_method, status, stylist, stylist_id,
+		       customer_name, customer_phone, customer_email, customer_address, customer_visits, customer_last_visit,
+		       shift_id, operator_name, created_at, updated_at
+		FROM transactions
+		WHERE deleted_at IS NULL
+	`
+	args := make([]any, 0, 2)
+	if startDate != nil {
+		query += fmt.Sprintf(" AND transacted_date >= $%d", len(args)+1)
+		args = append(args, startDate.Format("2006-01-02"))
+	}
+	if endDate != nil {
+		query += fmt.Sprintf(" AND transacted_date <= $%d", len(args)+1)
+		args = append(args, endDate.Format("2006-01-02"))
+	}
+	query += " ORDER BY transacted_date DESC, id DESC"
+
+	rows, err := r.DB.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var txs []domain.Transaction
+	var ids []int64
+	for rows.Next() {
+		var t domain.Transaction
+		var status string
+		var customerName, customerPhone, customerEmail, customerAddress pgtype.Text
+		var visits pgtype.Int4
+		var lastVisit pgtype.Text
+		var shiftID pgtype.Text
+		var opName pgtype.Text
+		var stylistID pgtype.Int8
+		if err := rows.Scan(
+			&t.ID, &t.Code, &t.Date, &t.Time, &t.Amount.Amount, &t.PaymentMethod, &status, &t.Stylist, &stylistID,
+			&customerName, &customerPhone, &customerEmail, &customerAddress, &visits, &lastVisit,
+			&shiftID, &opName, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if stylistID.Valid {
+			t.StylistID = &stylistID.Int64
+		}
+		t.Status = domain.TransactionStatus(status)
+		t.Customer = &domain.TransactionCustomerSnapshot{
+			Name:    customerName.String,
+			Phone:   customerPhone.String,
+			Email:   customerEmail.String,
+			Address: customerAddress.String,
+		}
+		if visits.Valid {
+			v := int(visits.Int32)
+			t.Customer.Visits = &v
+		}
+		if lastVisit.Valid {
+			lv := lastVisit.String
+			t.Customer.LastVisit = &lv
+		}
+		ids = append(ids, t.ID)
+		txs = append(txs, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(ids) == 0 {
+		return txs, nil
+	}
+
+	itemRows, err := r.DB.Pool.Query(ctx, `
+		SELECT transaction_id, id, product_id, name, category, price, qty, created_at
+		FROM transaction_items
+		WHERE transaction_id = ANY($1)
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer itemRows.Close()
+
+	itemsByTx := make(map[int64][]domain.TransactionItem)
+	for itemRows.Next() {
+		var it domain.TransactionItem
+		var txID int64
+		if err := itemRows.Scan(&txID, &it.ID, &it.ProductID, &it.Name, &it.Category, &it.Price.Amount, &it.Qty, &it.CreatedAt); err != nil {
+			return nil, err
+		}
+		itemsByTx[txID] = append(itemsByTx[txID], it)
+	}
+	if err := itemRows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range txs {
+		txs[i].Items = itemsByTx[txs[i].ID]
+	}
+
+	return txs, nil
+}

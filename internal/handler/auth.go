@@ -2,12 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"barberpos-backend/internal/domain"
+	"barberpos-backend/internal/server/authctx"
 	"barberpos-backend/internal/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -24,6 +26,10 @@ func (h AuthHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/auth/refresh", h.refresh)
 	r.Post("/auth/forgot-password", h.forgotPassword)
 	r.Post("/auth/reset-password", h.resetPassword)
+}
+
+func (h AuthHandler) RegisterProtectedRoutes(r chi.Router) {
+	r.Post("/auth/change-password", h.changePassword)
 }
 
 func (h AuthHandler) register(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +177,35 @@ func (h AuthHandler) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Service.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h AuthHandler) changePassword(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+	if req.NewPassword == "" || req.CurrentPassword == "" {
+		writeError(w, http.StatusBadRequest, "currentPassword and newPassword are required")
+		return
+	}
+	if err := h.Service.ChangePassword(r.Context(), user.ID, req.CurrentPassword, req.NewPassword); err != nil {
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			writeError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

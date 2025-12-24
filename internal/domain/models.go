@@ -22,6 +22,10 @@ const (
 
 	FinanceRevenue FinanceEntryType = "revenue"
 	FinanceExpense FinanceEntryType = "expense"
+
+	NotificationInfo    NotificationType = "info"
+	NotificationWarning NotificationType = "warning"
+	NotificationError   NotificationType = "error"
 )
 
 type UserRole string
@@ -29,6 +33,7 @@ type ActivityLogType string
 type AttendanceStatus string
 type TransactionStatus string
 type FinanceEntryType string
+type NotificationType string
 
 type Money struct {
 	Amount   int64
@@ -145,7 +150,7 @@ type Stock struct {
 	TenantID     *int64
 	ProductID    *int64
 	Name         string
-	CategoryID   *int64
+	Category     string
 	Image        string
 	Stock        int
 	Transactions int
@@ -157,6 +162,7 @@ type Stock struct {
 type Employee struct {
 	ID         int64
 	TenantID   *int64
+	ManagerID  *int64
 	Name       string
 	Role       string
 	Phone      string
@@ -201,6 +207,7 @@ type FinanceEntry struct {
 
 type MembershipState struct {
 	TenantID  *int64
+	OwnerID   *int64
 	UsedQuota int
 	FreeUsed  int
 	FreeStart time.Time
@@ -211,11 +218,23 @@ type MembershipState struct {
 type MembershipTopup struct {
 	ID        int64
 	TenantID  *int64
+	OwnerID   *int64
 	Amount    Money
 	Manager   string
 	Note      string
 	Date      time.Time
 	CreatedAt time.Time
+	DeletedAt *time.Time
+}
+
+type Notification struct {
+	ID        int64
+	UserID    *int64
+	Title     string
+	Message   string
+	Type      NotificationType
+	CreatedAt time.Time
+	ReadAt    *time.Time
 	DeletedAt *time.Time
 }
 

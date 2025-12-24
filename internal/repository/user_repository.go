@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"barberpos-backend/internal/db"
 	"barberpos-backend/internal/domain"
@@ -66,6 +67,41 @@ func (r UserRepository) GetByID(ctx context.Context, id int64) (*domain.User, er
 		return nil, err
 	}
 	return user, nil
+}
+
+type EmailAccountInfo struct {
+	IsGoogle bool
+	Deleted  bool
+}
+
+func (r UserRepository) GetEmailAccountInfo(ctx context.Context, email string) (*EmailAccountInfo, error) {
+	var isGoogle bool
+	var deletedAt *time.Time
+	err := r.DB.Pool.QueryRow(ctx, `
+		SELECT is_google, deleted_at
+		FROM users
+		WHERE lower(email) = lower($1)
+		LIMIT 1
+	`, email).Scan(&isGoogle, &deletedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &EmailAccountInfo{
+		IsGoogle: isGoogle,
+		Deleted:  deletedAt != nil,
+	}, nil
+}
+
+func (r UserRepository) UpdatePassword(ctx context.Context, id int64, hash string) error {
+	_, err := r.DB.Pool.Exec(ctx, `
+		UPDATE users
+		SET password_hash=$1, updated_at=now()
+		WHERE id=$2 AND deleted_at IS NULL
+	`, hash, id)
+	return err
 }
 
 func scanUser(row interface {

@@ -16,14 +16,14 @@ type MembershipService struct {
 }
 
 // GetState returns membership state and refreshes the monthly free quota window if needed.
-func (s MembershipService) GetState(ctx context.Context) (*domain.MembershipState, error) {
+func (s MembershipService) GetState(ctx context.Context, ownerUserID int64) (*domain.MembershipState, error) {
 	tx, err := s.Repo.DB.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	state, err := s.ensureState(ctx, tx)
+	state, err := s.ensureState(ctx, tx, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -34,14 +34,14 @@ func (s MembershipService) GetState(ctx context.Context) (*domain.MembershipStat
 }
 
 // SetUsedQuota sets total used quota (free+topup) and recalculates balances.
-func (s MembershipService) SetUsedQuota(ctx context.Context, used int) (*domain.MembershipState, error) {
+func (s MembershipService) SetUsedQuota(ctx context.Context, ownerUserID int64, used int) (*domain.MembershipState, error) {
 	tx, err := s.Repo.DB.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	state, err := s.normalizeUsed(ctx, tx, used)
+	state, err := s.normalizeUsed(ctx, tx, ownerUserID, used)
 	if err != nil {
 		return nil, err
 	}
@@ -52,15 +52,15 @@ func (s MembershipService) SetUsedQuota(ctx context.Context, used int) (*domain.
 }
 
 // ConsumeWithTx decrements membership quota inside an existing transaction.
-func (s MembershipService) ConsumeWithTx(ctx context.Context, tx pgx.Tx, units int) (*domain.MembershipState, error) {
+func (s MembershipService) ConsumeWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, units int) (*domain.MembershipState, error) {
 	if units <= 0 {
-		return s.ensureState(ctx, tx)
+		return s.ensureState(ctx, tx, ownerUserID)
 	}
-	state, err := s.ensureState(ctx, tx)
+	state, err := s.ensureState(ctx, tx, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
-	totalTopups, err := s.Repo.SumTopupsWithTx(ctx, tx)
+	totalTopups, err := s.Repo.SumTopupsWithTx(ctx, tx, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +75,7 @@ func (s MembershipService) ConsumeWithTx(ctx context.Context, tx pgx.Tx, units i
 	state.UsedQuota = state.FreeUsed + int(totalTopups-int64(state.TopupBal))
 
 	return s.Repo.SaveStateWithTx(ctx, tx, repository.SaveMembershipStateParams{
+		OwnerUserID:    ownerUserID,
 		UsedQuota:       state.UsedQuota,
 		FreeUsed:        state.FreeUsed,
 		FreePeriodStart: state.FreeStart,
@@ -83,12 +84,12 @@ func (s MembershipService) ConsumeWithTx(ctx context.Context, tx pgx.Tx, units i
 }
 
 // normalizeUsed spreads a total used value across free quota then topup balance.
-func (s MembershipService) normalizeUsed(ctx context.Context, tx pgx.Tx, used int) (*domain.MembershipState, error) {
-	state, err := s.ensureState(ctx, tx)
+func (s MembershipService) normalizeUsed(ctx context.Context, tx pgx.Tx, ownerUserID int64, used int) (*domain.MembershipState, error) {
+	state, err := s.ensureState(ctx, tx, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
-	totalTopups, err := s.Repo.SumTopupsWithTx(ctx, tx)
+	totalTopups, err := s.Repo.SumTopupsWithTx(ctx, tx, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +103,7 @@ func (s MembershipService) normalizeUsed(ctx context.Context, tx pgx.Tx, used in
 	state.UsedQuota = freeUsed + topupUsed
 
 	return s.Repo.SaveStateWithTx(ctx, tx, repository.SaveMembershipStateParams{
+		OwnerUserID:    ownerUserID,
 		UsedQuota:       state.UsedQuota,
 		FreeUsed:        state.FreeUsed,
 		FreePeriodStart: state.FreeStart,
@@ -110,8 +112,8 @@ func (s MembershipService) normalizeUsed(ctx context.Context, tx pgx.Tx, used in
 }
 
 // ensureState loads state, resets monthly free quota window if needed, and persists changes.
-func (s MembershipService) ensureState(ctx context.Context, tx pgx.Tx) (*domain.MembershipState, error) {
-	state, err := s.Repo.GetStateWithTx(ctx, tx)
+func (s MembershipService) ensureState(ctx context.Context, tx pgx.Tx, ownerUserID int64) (*domain.MembershipState, error) {
+	state, err := s.Repo.GetStateWithTx(ctx, tx, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -122,12 +124,13 @@ func (s MembershipService) ensureState(ctx context.Context, tx pgx.Tx) (*domain.
 		state.FreeUsed = 0
 	}
 	// Recalculate usedQuota to stay consistent.
-	totalTopups, err := s.Repo.SumTopupsWithTx(ctx, tx)
+	totalTopups, err := s.Repo.SumTopupsWithTx(ctx, tx, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
 	state.UsedQuota = state.FreeUsed + int(totalTopups-int64(state.TopupBal))
 	return s.Repo.SaveStateWithTx(ctx, tx, repository.SaveMembershipStateParams{
+		OwnerUserID:    ownerUserID,
 		UsedQuota:       state.UsedQuota,
 		FreeUsed:        state.FreeUsed,
 		FreePeriodStart: state.FreeStart,

@@ -31,7 +31,7 @@ func (h StockHandler) list(w http.ResponseWriter, r *http.Request) {
 			"id":           s.ID,
 			"productId":    s.ProductID,
 			"name":         s.Name,
-			"categoryId":   s.CategoryID,
+			"category":     s.Category,
 			"image":        s.Image,
 			"stock":        s.Stock,
 			"transactions": s.Transactions,
@@ -84,7 +84,13 @@ func (h StockHandler) history(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	items, err := h.Repo.History(r.Context(), stockID, 100)
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	items, err := h.Repo.History(r.Context(), stockID, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -20,7 +20,27 @@ func (h FinanceHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h FinanceHandler) list(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Repo.List(r.Context(), 200)
+	startDate, err := parseDateQuery(r, "startDate")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid startDate")
+		return
+	}
+	endDate, err := parseDateQuery(r, "endDate")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid endDate")
+		return
+	}
+	if startDate != nil && endDate != nil && startDate.After(*endDate) {
+		writeError(w, http.StatusBadRequest, "startDate must be before endDate")
+		return
+	}
+
+	var items []domain.FinanceEntry
+	if startDate != nil || endDate != nil {
+		items, err = h.Repo.ListFiltered(r.Context(), startDate, endDate)
+	} else {
+		items, err = h.Repo.List(r.Context(), 200)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

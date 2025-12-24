@@ -28,7 +28,7 @@ func (r StockRepository) List(ctx context.Context, limit int) ([]domain.Stock, e
 	var items []domain.Stock
 	for rows.Next() {
 		var s domain.Stock
-		if err := rows.Scan(&s.ID, &s.ProductID, &s.Name, &s.CategoryID, &s.Image, &s.Stock, &s.Transactions, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.ProductID, &s.Name, &s.Category, &s.Image, &s.Stock, &s.Transactions, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, s)
@@ -56,7 +56,7 @@ func (r StockRepository) Adjust(ctx context.Context, in AdjustStockInput) (*doma
 		SELECT id, product_id, name, category, image, stock, transactions, created_at, updated_at
 		FROM stocks
 		WHERE id=$1 FOR UPDATE
-	`, in.StockID).Scan(&current.ID, &current.ProductID, &current.Name, &current.CategoryID, &current.Image, &current.Stock, &current.Transactions, &current.CreatedAt, &current.UpdatedAt)
+	`, in.StockID).Scan(&current.ID, &current.ProductID, &current.Name, &current.Category, &current.Image, &current.Stock, &current.Transactions, &current.CreatedAt, &current.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound

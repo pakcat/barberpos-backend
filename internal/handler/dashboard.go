@@ -26,6 +26,10 @@ func (h DashboardHandler) summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"transaksiHariIni":  data.TodayTransactions,
+		"omzetHariIni":      data.TodayRevenue,
+		"customerHariIni":   data.TodayCustomers,
+		"layananTerjual":    data.ServicesSold,
 		"totalRevenue":      data.TotalRevenue,
 		"totalTransactions": data.TotalTransactions,
 		"todayRevenue":      data.TodayRevenue,
@@ -53,15 +57,27 @@ func (h DashboardHandler) topStaff(w http.ResponseWriter, r *http.Request) {
 func (h DashboardHandler) sales(w http.ResponseWriter, r *http.Request) {
 	rangeParam := strings.ToLower(r.URL.Query().Get("range"))
 	days := 30
-	if rangeParam == "7d" {
+	switch rangeParam {
+	case "1d", "today", "hari ini", "hari":
+		days = 1
+	case "7d", "minggu ini", "minggu", "week":
 		days = 7
+	case "30d", "bulan ini", "bulan", "month":
+		days = 30
 	}
 	points, err := h.Repo.SalesSeries(r.Context(), days)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, points)
+	resp := make([]map[string]any, 0, len(points))
+	for _, p := range points {
+		resp = append(resp, map[string]any{
+			"label": p.Label,
+			"value": p.Amount,
+		})
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func toDashboardItems(items []repository.DashboardItem) []map[string]any {
@@ -70,6 +86,7 @@ func toDashboardItems(items []repository.DashboardItem) []map[string]any {
 		out = append(out, map[string]any{
 			"name":   it.Name,
 			"amount": it.Amount,
+			"qty":    it.Count,
 			"count":  it.Count,
 		})
 	}

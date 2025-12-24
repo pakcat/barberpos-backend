@@ -7,6 +7,7 @@ import (
 
 	"barberpos-backend/internal/repository"
 	"barberpos-backend/internal/service"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -22,7 +23,12 @@ func (h MembershipHandler) RegisterRoutes(r chi.Router) {
 }
 
 func (h MembershipHandler) state(w http.ResponseWriter, r *http.Request) {
-	s, err := h.Service.GetState(r.Context())
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	s, err := h.Service.GetState(r.Context(), user.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -43,7 +49,12 @@ func (h MembershipHandler) updateState(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
-	s, err := h.Service.SetUsedQuota(r.Context(), req.UsedQuota)
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	s, err := h.Service.SetUsedQuota(r.Context(), user.ID, req.UsedQuota)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -57,7 +68,12 @@ func (h MembershipHandler) updateState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h MembershipHandler) listTopups(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Service.Repo.ListTopups(r.Context(), 200)
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	items, err := h.Service.Repo.ListTopups(r.Context(), user.ID, 200)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -90,6 +106,11 @@ func (h MembershipHandler) createTopup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "manager is required")
 		return
 	}
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	dt := time.Now()
 	if req.Date != "" {
 		if t, err := time.Parse(time.RFC3339, req.Date); err == nil {
@@ -97,6 +118,7 @@ func (h MembershipHandler) createTopup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	topup, err := h.Service.Repo.CreateTopup(r.Context(), repository.CreateTopupInput{
+		OwnerUserID: user.ID,
 		Amount:  req.Amount,
 		Manager: req.Manager,
 		Note:    req.Note,

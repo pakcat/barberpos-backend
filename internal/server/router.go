@@ -34,6 +34,7 @@ func NewRouter(cfg config.Config,
 	closing handler.ClosingHandler,
 	payments handler.PaymentHandler,
 	fcm handler.FCMHandler,
+	notifications handler.NotificationHandler,
 	stocks handler.StockHandler,
 	employees handler.EmployeeHandler,
 	docs handler.DocsHandler,
@@ -64,6 +65,7 @@ func NewRouter(cfg config.Config,
 
 	r.Group(func(pr chi.Router) {
 		pr.Use(AuthMiddleware(cfg.JWTSecret))
+		auth.RegisterProtectedRoutes(pr)
 		// staff-level (staff/manager/admin)
 		pr.Group(func(sr chi.Router) {
 			sr.Use(RequireRole(domain.RoleAdmin, domain.RoleManager, domain.RoleStaff))
@@ -75,6 +77,7 @@ func NewRouter(cfg config.Config,
 			payments.RegisterRoutes(sr)
 			closing.RegisterRoutes(sr)
 			fcm.RegisterRoutes(sr)
+			notifications.RegisterRoutes(sr)
 		})
 		// manager-level (manager/admin)
 		pr.Group(func(mr chi.Router) {

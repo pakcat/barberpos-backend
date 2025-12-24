@@ -3,12 +3,14 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
 	"barberpos-backend/internal/service"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )
@@ -17,6 +19,7 @@ type TransactionHandler struct {
 	Repo       repository.TransactionRepository
 	Currency   string
 	Membership *service.MembershipService
+	Employees  repository.EmployeeRepository
 }
 
 func (h TransactionHandler) RegisterRoutes(r chi.Router) {
@@ -50,6 +53,21 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var ownerID int64
+	if h.Membership != nil {
+		user := authctx.FromContext(r.Context())
+		if user == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		resolved, err := resolveOwnerID(r.Context(), *user, h.Employees)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		ownerID = resolved
+	}
+
 	items := make([]repository.CreateTransactionItem, 0, len(req.Items))
 	for _, it := range req.Items {
 		items = append(items, repository.CreateTransactionItem{
@@ -74,7 +92,7 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 		if h.Membership == nil {
 			return nil
 		}
-		_, err := h.Membership.ConsumeWithTx(ctx, tx, unitsToConsume)
+		_, err := h.Membership.ConsumeWithTx(ctx, tx, ownerID, unitsToConsume)
 		return err
 	})
 	if err != nil {
@@ -94,7 +112,27 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h TransactionHandler) listTransactions(w http.ResponseWriter, r *http.Request) {
-	txs, err := h.Repo.List(r.Context(), 200)
+	startDate, err := parseDateQuery(r, "startDate")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid startDate")
+		return
+	}
+	endDate, err := parseDateQuery(r, "endDate")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid endDate")
+		return
+	}
+	if startDate != nil && endDate != nil && startDate.After(*endDate) {
+		writeError(w, http.StatusBadRequest, "startDate must be before endDate")
+		return
+	}
+
+	var txs []domain.Transaction
+	if startDate != nil || endDate != nil {
+		txs, err = h.Repo.ListFiltered(r.Context(), startDate, endDate)
+	} else {
+		txs, err = h.Repo.List(r.Context(), 200)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -126,6 +164,7 @@ func (h TransactionHandler) listTransactions(w http.ResponseWriter, r *http.Requ
 			"amount":        t.Amount.Amount,
 			"paymentMethod": t.PaymentMethod,
 			"status":        string(t.Status),
+			"stylist":       t.Stylist,
 			"stylistId":     t.StylistID,
 			"items":         toOrderLines(t.Items),
 			"customer":      customer,
@@ -163,4 +202,25 @@ func countUnits(items []orderLine) int {
 		return 1
 	}
 	return sum
+}
+
+func resolveOwnerID(ctx context.Context, user authctx.CurrentUser, employees repository.EmployeeRepository) (int64, error) {
+	switch user.Role {
+	case domain.RoleManager, domain.RoleAdmin:
+		return user.ID, nil
+	case domain.RoleStaff:
+		if user.Email == "" {
+			return 0, errors.New("staff email is required")
+		}
+		emp, err := employees.GetByEmail(ctx, user.Email)
+		if err != nil {
+			return 0, errors.New("employee not found")
+		}
+		if emp.ManagerID == nil {
+			return 0, errors.New("employee has no manager")
+		}
+		return *emp.ManagerID, nil
+	default:
+		return 0, errors.New("invalid role")
+	}
 }

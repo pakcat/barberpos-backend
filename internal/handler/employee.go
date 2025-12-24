@@ -8,6 +8,7 @@ import (
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
+	"barberpos-backend/internal/server/authctx"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -31,14 +32,15 @@ func (h EmployeeHandler) list(w http.ResponseWriter, r *http.Request) {
 	resp := make([]map[string]any, 0, len(items))
 	for _, e := range items {
 		resp = append(resp, map[string]any{
-			"id":         e.ID,
-			"name":       e.Name,
-			"role":       e.Role,
-			"phone":      e.Phone,
-			"email":      e.Email,
-			"joinDate":   e.JoinDate.Format("2006-01-02"),
-			"commission": e.Commission,
-			"active":     e.Active,
+			"id":            e.ID,
+			"managerUserId": e.ManagerID,
+			"name":          e.Name,
+			"role":          e.Role,
+			"phone":         e.Phone,
+			"email":         e.Email,
+			"joinDate":      e.JoinDate.Format("2006-01-02"),
+			"commission":    e.Commission,
+			"active":        e.Active,
 		})
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -68,6 +70,11 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "pin is required")
 		return
 	}
+	user := authctx.FromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	joinDate := time.Now()
 	if req.JoinDate != "" {
 		if t, err := time.Parse("2006-01-02", req.JoinDate); err == nil {
@@ -79,6 +86,7 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		active = *req.Active
 	}
 	e := domain.Employee{
+		ManagerID:  &user.ID,
 		Name:       req.Name,
 		Role:       req.Role,
 		Phone:      req.Phone,
@@ -104,14 +112,15 @@ func (h EmployeeHandler) upsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":         saved.ID,
-		"name":       saved.Name,
-		"role":       saved.Role,
-		"phone":      saved.Phone,
-		"email":      saved.Email,
-		"joinDate":   saved.JoinDate.Format("2006-01-02"),
-		"commission": saved.Commission,
-		"active":     saved.Active,
+		"id":            saved.ID,
+		"managerUserId": saved.ManagerID,
+		"name":          saved.Name,
+		"role":          saved.Role,
+		"phone":         saved.Phone,
+		"email":         saved.Email,
+		"joinDate":      saved.JoinDate.Format("2006-01-02"),
+		"commission":    saved.Commission,
+		"active":        saved.Active,
 	})
 }
 
