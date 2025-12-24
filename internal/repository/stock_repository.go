@@ -14,6 +14,43 @@ type StockRepository struct {
 	DB *db.Postgres
 }
 
+func (r StockRepository) AdjustByProductIDWithTx(ctx context.Context, tx pgx.Tx, productID int64, delta int, typ string, note string) error {
+	row := tx.QueryRow(ctx, `
+		SELECT id, stock
+		FROM stocks
+		WHERE deleted_at IS NULL AND product_id=$1
+		FOR UPDATE
+	`, productID)
+	var stockID int64
+	var current int
+	if err := row.Scan(&stockID, &current); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	newStock := current + delta
+	if newStock < 0 {
+		newStock = 0
+	}
+	_, err := tx.Exec(ctx, `
+		UPDATE stocks
+		SET stock=$1, transactions=transactions+1, updated_at=now()
+		WHERE id=$2
+	`, newStock, stockID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO stock_history (stock_id, product_id, change, remaining, note, type, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6, now())
+	`, stockID, productID, delta, newStock, note, typ)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r StockRepository) List(ctx context.Context, limit int) ([]domain.Stock, error) {
 	rows, err := r.DB.Pool.Query(ctx, `
 		SELECT id, product_id, name, category, image, stock, transactions, created_at, updated_at

@@ -99,7 +99,14 @@ func main() {
 	employeeHandler := handler.EmployeeHandler{Repo: employeeRepo}
 	fcmHandler := handler.FCMHandler{Repo: fcmRepo}
 	notificationHandler := handler.NotificationHandler{Repo: notificationRepo}
-	transactionHandler := handler.TransactionHandler{Repo: txRepo, Currency: cfg.DefaultCurrency, Membership: &membershipSvc, Employees: employeeRepo}
+	transactionHandler := handler.TransactionHandler{
+		Repo:       txRepo,
+		Currency:   cfg.DefaultCurrency,
+		Membership: &membershipSvc,
+		Employees:  employeeRepo,
+		Stocks:     stockRepo,
+		Finance:    financeRepo,
+	}
 	attendanceHandler := handler.AttendanceHandler{Repo: attendanceRepo}
 	dashboardHandler := handler.DashboardHandler{Repo: dashboardRepo}
 	closingHandler := handler.ClosingHandler{Repo: closingRepo}

@@ -74,6 +74,27 @@ func (r ProductRepository) Upsert(ctx context.Context, p domain.Product) (*domai
 	if err != nil {
 		return nil, err
 	}
+
+	// Keep stocks table in sync for tracked products (used by /stock endpoints).
+	if p.TrackStock {
+		_, _ = r.DB.Pool.Exec(ctx, `
+			INSERT INTO stocks (product_id, name, category, image, stock, transactions, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5, 0, now(), now())
+			ON CONFLICT (product_id) DO UPDATE SET
+				name=EXCLUDED.name,
+				category=EXCLUDED.category,
+				image=EXCLUDED.image,
+				stock=EXCLUDED.stock,
+				updated_at=now(),
+				deleted_at=NULL
+		`, p.ID, p.Name, p.Category, p.Image, p.Stock)
+	} else {
+		_, _ = r.DB.Pool.Exec(ctx, `
+			UPDATE stocks
+			SET deleted_at=now(), updated_at=now()
+			WHERE product_id=$1 AND deleted_at IS NULL
+		`, p.ID)
+	}
 	return &p, nil
 }
 

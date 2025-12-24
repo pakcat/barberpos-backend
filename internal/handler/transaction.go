@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"barberpos-backend/internal/domain"
 	"barberpos-backend/internal/repository"
@@ -20,11 +22,16 @@ type TransactionHandler struct {
 	Currency   string
 	Membership *service.MembershipService
 	Employees  repository.EmployeeRepository
+	Stocks     repository.StockRepository
+	Finance    repository.FinanceRepository
 }
 
 func (h TransactionHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/orders", h.createOrder)
 	r.Get("/transactions", h.listTransactions)
+	r.Get("/transactions/{code}", h.getByCode)
+	r.Post("/transactions/{code}/refund", h.refund)
+	r.Post("/transactions/{code}/mark-paid", h.markPaid)
 }
 
 type orderPayload struct {
@@ -40,10 +47,11 @@ type orderPayload struct {
 }
 
 type orderLine struct {
-	Name     string `json:"name"`
-	Category string `json:"category"`
-	Price    int64  `json:"price"`
-	Qty      int    `json:"qty"`
+	ProductID *int64 `json:"productId"`
+	Name      string `json:"name"`
+	Category  string `json:"category"`
+	Price     int64  `json:"price"`
+	Qty       int    `json:"qty"`
 }
 
 func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) {
@@ -71,10 +79,11 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 	items := make([]repository.CreateTransactionItem, 0, len(req.Items))
 	for _, it := range req.Items {
 		items = append(items, repository.CreateTransactionItem{
-			Name:     it.Name,
-			Category: it.Category,
-			Price:    it.Price,
-			Qty:      it.Qty,
+			ProductID: it.ProductID,
+			Name:      it.Name,
+			Category:  it.Category,
+			Price:     it.Price,
+			Qty:       it.Qty,
 		})
 	}
 
@@ -89,6 +98,13 @@ func (h TransactionHandler) createOrder(w http.ResponseWriter, r *http.Request) 
 		Items:         items,
 		ShiftID:       strPtr(req.ShiftID),
 	}, func(ctx context.Context, tx pgx.Tx) error {
+		for _, it := range items {
+			if it.ProductID == nil || it.Qty <= 0 {
+				continue
+			}
+			// Best-effort: only affects products that track stock (stocks row exists).
+			_ = h.Stocks.AdjustByProductIDWithTx(ctx, tx, *it.ProductID, -it.Qty, "sale", "sale")
+		}
 		if h.Membership == nil {
 			return nil
 		}
@@ -223,4 +239,151 @@ func resolveOwnerID(ctx context.Context, user authctx.CurrentUser, employees rep
 	default:
 		return 0, errors.New("invalid role")
 	}
+}
+
+func (h TransactionHandler) getByCode(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+	if code == "" {
+		writeError(w, http.StatusBadRequest, "code is required")
+		return
+	}
+	t, err := h.Repo.GetByCode(r.Context(), code)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "transaction not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	customer := map[string]any{
+		"name":      "",
+		"phone":     "",
+		"email":     "",
+		"address":   "",
+		"visits":    nil,
+		"lastVisit": nil,
+	}
+	if t.Customer != nil {
+		customer["name"] = t.Customer.Name
+		customer["phone"] = t.Customer.Phone
+		customer["email"] = t.Customer.Email
+		customer["address"] = t.Customer.Address
+		customer["visits"] = t.Customer.Visits
+		customer["lastVisit"] = t.Customer.LastVisit
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":            strconv.FormatInt(t.ID, 10),
+		"code":          t.Code,
+		"date":          t.Date.Format("2006-01-02"),
+		"time":          t.Time,
+		"amount":        t.Amount.Amount,
+		"paymentMethod": t.PaymentMethod,
+		"status":        string(t.Status),
+		"stylist":       t.Stylist,
+		"stylistId":     t.StylistID,
+		"items":         toOrderLines(t.Items),
+		"customer":      customer,
+	})
+}
+
+func (h TransactionHandler) refund(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil || (user.Role != domain.RoleManager && user.Role != domain.RoleAdmin) {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	code := chi.URLParam(r, "code")
+	if code == "" {
+		writeError(w, http.StatusBadRequest, "code is required")
+		return
+	}
+	var req struct {
+		Note   string `json:"note"`
+		Delete *bool  `json:"delete"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+	deleteFlag := true
+	if req.Delete != nil {
+		deleteFlag = *req.Delete
+	}
+
+	var ownerID int64
+	if h.Membership != nil {
+		resolved, err := resolveOwnerID(r.Context(), *user, h.Employees)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		ownerID = resolved
+	}
+
+	err := h.Repo.RefundByCode(
+		r.Context(),
+		repository.RefundTransactionParams{
+			Code:       code,
+			Note:       req.Note,
+			Delete:     deleteFlag,
+			RefundedBy: &user.ID,
+		},
+		func(ctx context.Context, tx pgx.Tx, t domain.Transaction, items []repository.RefundItem, units int) error {
+			for _, it := range items {
+				if it.ProductID == nil || it.Qty <= 0 {
+					continue
+				}
+				_ = h.Stocks.AdjustByProductIDWithTx(ctx, tx, *it.ProductID, it.Qty, "refund", "refund "+code)
+			}
+			_, _ = h.Finance.CreateWithTx(ctx, tx, repository.CreateFinanceInput{
+				Title:    "Refund " + code,
+				Amount:   t.Amount.Amount,
+				Category: "Refund",
+				Date:     time.Now(),
+				Type:     domain.FinanceExpense,
+				Note:     req.Note,
+			})
+			if h.Membership == nil {
+				return nil
+			}
+			_, err := h.Membership.RefundWithTx(ctx, tx, ownerID, units)
+			return err
+		},
+	)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "transaction not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status": "ok",
+	})
+}
+
+func (h TransactionHandler) markPaid(w http.ResponseWriter, r *http.Request) {
+	user := authctx.FromContext(r.Context())
+	if user == nil || (user.Role != domain.RoleManager && user.Role != domain.RoleAdmin) {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	code := chi.URLParam(r, "code")
+	if code == "" {
+		writeError(w, http.StatusBadRequest, "code is required")
+		return
+	}
+	if err := h.Repo.MarkPaidByCode(r.Context(), code); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "transaction not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status": "ok",
+	})
 }

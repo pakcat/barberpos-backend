@@ -83,6 +83,22 @@ func (s MembershipService) ConsumeWithTx(ctx context.Context, tx pgx.Tx, ownerUs
 	})
 }
 
+// RefundWithTx decreases membership usage by `units` (best-effort reverse of ConsumeWithTx).
+func (s MembershipService) RefundWithTx(ctx context.Context, tx pgx.Tx, ownerUserID int64, units int) (*domain.MembershipState, error) {
+	if units <= 0 {
+		return s.ensureState(ctx, tx, ownerUserID)
+	}
+	state, err := s.ensureState(ctx, tx, ownerUserID)
+	if err != nil {
+		return nil, err
+	}
+	newUsed := state.UsedQuota - units
+	if newUsed < 0 {
+		newUsed = 0
+	}
+	return s.normalizeUsed(ctx, tx, ownerUserID, newUsed)
+}
+
 // normalizeUsed spreads a total used value across free quota then topup balance.
 func (s MembershipService) normalizeUsed(ctx context.Context, tx pgx.Tx, ownerUserID int64, used int) (*domain.MembershipState, error) {
 	state, err := s.ensureState(ctx, tx, ownerUserID)

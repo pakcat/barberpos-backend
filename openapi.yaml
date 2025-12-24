@@ -337,6 +337,85 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/OrderRequest'
+  /transactions/{code}:
+    get:
+      summary: Get transaction by code
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transaction
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  code: { type: string }
+                  date: { type: string }
+                  time: { type: string }
+                  amount: { type: integer }
+                  paymentMethod: { type: string }
+                  status: { type: string }
+                  stylist: { type: string }
+                  stylistId: { type: integer, format: int64 }
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderRequest'
+                  customer:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      phone: { type: string }
+                      email: { type: string }
+                      address: { type: string }
+  /transactions/{code}/refund:
+    post:
+      summary: Refund a transaction (and optionally delete)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                delete:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: OK
+  /transactions/{code}/mark-paid:
+    post:
+      summary: Mark a transaction as paid (undo refund)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
   /payments/qris:
     post:
       summary: Create QRIS payment intent (dummy)
@@ -950,6 +1029,7 @@ components:
           items:
             type: object
             properties:
+              productId: { type: integer, format: int64 }
               name: { type: string }
               category: { type: string }
               price: { type: integer }
