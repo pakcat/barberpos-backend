@@ -33,6 +33,14 @@ func (h SettingsHandler) save(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
+	current, err := h.Repo.Get(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if req.CurrencyCode == "" {
+		req.CurrencyCode = current.CurrencyCode
+	}
 	s, err := h.Repo.Save(r.Context(), req)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

@@ -510,6 +510,25 @@ paths:
         '200':
           description: Summary
   /closing:
+    get:
+      summary: List closing history
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClosingHistory'
     post:
       summary: Submit closing
       security:
@@ -808,6 +827,39 @@ paths:
       responses:
         '200':
           description: Welcome
+  /logs:
+    get:
+      summary: List activity logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivityLog'
+    post:
+      summary: Create activity log (sync)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityLogCreateRequest'
+      responses:
+        '200':
+          description: OK
 
 components:
   securitySchemes:
@@ -946,8 +998,75 @@ components:
         note: { type: string }
         staff: { type: string }
         service: { type: string }
+    ClosingHistory:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        tanggal: { type: string }
+        shift: { type: string }
+        karyawan: { type: string }
+        shiftId: { type: string }
+        operatorName: { type: string }
+        total: { type: integer }
+        status: { type: string }
+        catatan: { type: string }
+        fisik: { type: string }
+        createdAt: { type: string, format: date-time }
+    ActivityLogCreateRequest:
+      type: object
+      properties:
+        title: { type: string }
+        message: { type: string }
+        actor: { type: string }
+        type: { type: string, enum: [info, warning, error] }
+        timestamp: { type: string, format: date-time }
+    ActivityLog:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        title: { type: string }
+        message: { type: string }
+        actor: { type: string }
+        type: { type: string }
+        timestamp: { type: string, format: date-time }
+        synced: { type: boolean }
     ErrorResponse:
       type: object
       properties:
         error: { type: string }
         message: { type: string }
+  /finance/export:
+    get:
+      summary: Export finance entries
+      description: Downloads finance entries as CSV or XLSX using query parameters `format=csv|xlsx` and optional `startDate/endDate` (YYYY-MM-DD).
+      parameters:
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [csv, xlsx]
+          required: false
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            example: "2025-01-01"
+          required: false
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            example: "2025-01-31"
+          required: false
+      responses:
+        "200":
+          description: File download
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary

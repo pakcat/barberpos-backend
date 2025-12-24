@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"barberpos-backend/internal/db"
 	"barberpos-backend/internal/domain"
@@ -64,7 +65,21 @@ func (r StockRepository) Adjust(ctx context.Context, in AdjustStockInput) (*doma
 		return nil, err
 	}
 
-	newStock := current.Stock + in.Change
+	change := in.Change
+	switch strings.ToLower(strings.TrimSpace(in.Type)) {
+	case "reduce":
+		if change > 0 {
+			change = -change
+		}
+	case "recount":
+		// Interpret `Change` as absolute stock value.
+		if change < 0 {
+			change = 0
+		}
+		change = change - current.Stock
+	}
+
+	newStock := current.Stock + change
 	if newStock < 0 {
 		newStock = 0
 	}
@@ -81,7 +96,7 @@ func (r StockRepository) Adjust(ctx context.Context, in AdjustStockInput) (*doma
 	_, err = tx.Exec(ctx, `
 		INSERT INTO stock_history (stock_id, product_id, change, remaining, note, type, created_at)
 		VALUES ($1,$2,$3,$4,$5,$6, now())
-	`, in.StockID, in.ProductID, in.Change, newStock, in.Note, in.Type)
+	`, in.StockID, in.ProductID, change, newStock, in.Note, in.Type)
 	if err != nil {
 		return nil, err
 	}

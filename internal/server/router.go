@@ -32,6 +32,7 @@ func NewRouter(cfg config.Config,
 	attendance handler.AttendanceHandler,
 	dashboard handler.DashboardHandler,
 	closing handler.ClosingHandler,
+	logs handler.ActivityLogHandler,
 	payments handler.PaymentHandler,
 	fcm handler.FCMHandler,
 	notifications handler.NotificationHandler,
@@ -76,6 +77,7 @@ func NewRouter(cfg config.Config,
 			attendance.RegisterRoutes(sr)
 			payments.RegisterRoutes(sr)
 			closing.RegisterRoutes(sr)
+			logs.RegisterRoutes(sr)
 			fcm.RegisterRoutes(sr)
 			notifications.RegisterRoutes(sr)
 		})

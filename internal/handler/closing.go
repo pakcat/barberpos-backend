@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"barberpos-backend/internal/repository"
@@ -15,6 +16,7 @@ type ClosingHandler struct {
 
 func (h ClosingHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/closing/summary", h.summary)
+	r.Get("/closing", h.list)
 	r.Post("/closing", h.create)
 }
 
@@ -60,7 +62,7 @@ func (h ClosingHandler) create(w http.ResponseWriter, r *http.Request) {
 	if req.Status == "" {
 		req.Status = "closed"
 	}
-	if err := h.Repo.Create(r.Context(), repository.CreateClosingInput{
+	id, err := h.Repo.Create(r.Context(), repository.CreateClosingInput{
 		Tanggal:      date,
 		Shift:        req.Shift,
 		Karyawan:     req.Karyawan,
@@ -70,9 +72,41 @@ func (h ClosingHandler) create(w http.ResponseWriter, r *http.Request) {
 		Status:       req.Status,
 		Catatan:      req.Catatan,
 		Fisik:        req.Fisik,
-	}); err != nil {
+	})
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "id": id})
+}
+
+func (h ClosingHandler) list(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	items, err := h.Repo.List(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp := make([]map[string]any, 0, len(items))
+	for _, c := range items {
+		resp = append(resp, map[string]any{
+			"id":           c.ID,
+			"tanggal":      c.Tanggal.Format("2006-01-02"),
+			"shift":        c.Shift,
+			"karyawan":     c.Karyawan,
+			"shiftId":      c.ShiftID,
+			"operatorName": c.OperatorName,
+			"total":        c.Total,
+			"status":       c.Status,
+			"catatan":      c.Catatan,
+			"fisik":        c.Fisik,
+			"createdAt":    c.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
